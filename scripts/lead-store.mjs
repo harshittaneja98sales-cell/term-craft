@@ -18,6 +18,8 @@ const supabaseKey =
 const supabaseLeadsTable = process.env.SUPABASE_LEADS_TABLE ?? "leads";
 const supabaseEventsTable =
   process.env.SUPABASE_EVENTS_TABLE ?? "analytics_events";
+let memoryLeads = [];
+let memoryEvents = [];
 
 const leadColumns = [
   "id",
@@ -94,25 +96,49 @@ async function writeJsonArray(fileName, records) {
 }
 
 async function readLocalLeads() {
-  return readJsonArray("leads.json");
+  try {
+    return await readJsonArray("leads.json");
+  } catch (error) {
+    console.error(error);
+    return memoryLeads;
+  }
 }
 
 async function saveLocalLead(lead) {
-  const leads = await readLocalLeads();
-  const nextLeads = [lead, ...leads].slice(0, 5000);
-  await writeJsonArray("leads.json", nextLeads);
+  try {
+    const leads = await readJsonArray("leads.json");
+    const nextLeads = [lead, ...leads].slice(0, 5000);
+    await writeJsonArray("leads.json", nextLeads);
+    memoryLeads = nextLeads;
+  } catch (error) {
+    console.error(error);
+    memoryLeads = [lead, ...memoryLeads].slice(0, 5000);
+  }
+
   return lead;
 }
 
 async function readLocalEvents(limit = 1000) {
-  const events = await readJsonArray("analytics-events.json");
-  return events.slice(0, limit);
+  try {
+    const events = await readJsonArray("analytics-events.json");
+    return events.slice(0, limit);
+  } catch (error) {
+    console.error(error);
+    return memoryEvents.slice(0, limit);
+  }
 }
 
 async function saveLocalEvent(event) {
-  const events = await readLocalEvents(5000);
-  const nextEvents = [event, ...events].slice(0, 10000);
-  await writeJsonArray("analytics-events.json", nextEvents);
+  try {
+    const events = await readJsonArray("analytics-events.json");
+    const nextEvents = [event, ...events].slice(0, 10000);
+    await writeJsonArray("analytics-events.json", nextEvents);
+    memoryEvents = nextEvents;
+  } catch (error) {
+    console.error(error);
+    memoryEvents = [event, ...memoryEvents].slice(0, 10000);
+  }
+
   return event;
 }
 
