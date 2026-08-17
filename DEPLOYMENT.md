@@ -15,6 +15,9 @@ Use Render for the first launch because this app includes a Node/Express API for
   - `SUPABASE_URL`
   - `SUPABASE_SERVICE_ROLE_KEY`
   - `ADMIN_API_KEY`
+  - `RESEND_API_KEY`
+  - `EMAIL_FROM`
+  - `EMAIL_REPLY_TO`
 
 The included `render.yaml` defines these settings as a Render Blueprint.
 
@@ -32,6 +35,20 @@ The app can run without Supabase, but Render Free does not provide durable local
 5. Redeploy the service.
 
 Production admin routes require `ADMIN_API_KEY`. The service role key must stay server-side. Do not put it in frontend code or public docs.
+
+## Email Delivery
+
+Term Craft sends the editable/signable workspace link through Resend when `RESEND_API_KEY` is configured.
+
+1. Create or open a Resend account.
+2. Create an API key.
+3. In Render > term-craft > Environment, add:
+   - `RESEND_API_KEY`
+   - `EMAIL_FROM`
+   - `EMAIL_REPLY_TO`
+4. Redeploy the service.
+
+For testing, `EMAIL_FROM=Term Craft <onboarding@resend.dev>` can be used. Before real traffic, verify `usetermcraft.com` in Resend and switch `EMAIL_FROM` to your own sender, such as `Term Craft <hello@usetermcraft.com>`.
 
 ## GoDaddy DNS
 

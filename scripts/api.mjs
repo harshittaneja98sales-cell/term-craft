@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { sendEditableVersionEmail } from "./email-service.mjs";
 import {
   getStorageInfo,
   leadsToCsv,
@@ -194,7 +195,35 @@ export function registerApiRoutes(app) {
         userAgent: lead.userAgent,
         occurredAt: lead.submittedAt,
       });
-      res.status(201).json({ lead });
+
+      const emailDelivery = await sendEditableVersionEmail(lead);
+      await saveAnalyticsEvent({
+        id: randomUUID(),
+        eventName: emailDelivery.sent
+          ? "editable_email_sent"
+          : emailDelivery.skipped
+            ? "editable_email_skipped"
+            : "editable_email_failed",
+        path: lead.landingPath,
+        templateTitle: lead.templateTitle,
+        templatePath: lead.templatePath,
+        referrer: lead.referrer,
+        utmSource: lead.utmSource,
+        utmMedium: lead.utmMedium,
+        utmCampaign: lead.utmCampaign,
+        utmTerm: lead.utmTerm,
+        utmContent: lead.utmContent,
+        metadata: {
+          leadId: lead.id,
+          provider: emailDelivery.provider,
+          reason: emailDelivery.reason ?? "",
+          sent: emailDelivery.sent,
+        },
+        userAgent: lead.userAgent,
+        occurredAt: new Date().toISOString(),
+      });
+
+      res.status(201).json({ emailDelivery, lead });
     } catch (error) {
       next(error);
     }

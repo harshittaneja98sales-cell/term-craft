@@ -147,6 +147,17 @@ type AnalyticsSummary = {
   recentEvents: AnalyticsEventRecord[];
 };
 
+type LeadCaptureResponse = {
+  lead: LeadApiRecord;
+  emailDelivery?: {
+    provider: string;
+    sent: boolean;
+    skipped: boolean;
+    reason?: string;
+    id?: string;
+  };
+};
+
 type B2BLeadGenerationForm = {
   clientName: string;
   providerName: string;
@@ -538,7 +549,7 @@ async function submitLeadCapture({
     throw new Error("Lead capture request failed.");
   }
 
-  return response.json() as Promise<{ lead: LeadApiRecord }>;
+  return response.json() as Promise<LeadCaptureResponse>;
 }
 
 function sendAnalyticsEvent(
@@ -2642,16 +2653,16 @@ function SeoTemplatePage({ config }: { config: SeoTemplateConfig }) {
           }
 
           try {
-            await submitLeadCapture({
+            const result = await submitLeadCapture({
               downloadedAt:
                 downloadContext?.downloadedAt ?? new Date().toISOString(),
               email,
               templatePath: config.path,
               templateTitle: config.contractTitle,
             });
-            return true;
+            return result.emailDelivery?.sent ? "emailed" : "saved";
           } catch {
-            return false;
+            return "local";
           }
         }}
       />
@@ -2667,12 +2678,12 @@ function PostDownloadModal({
 }: {
   isOpen: boolean;
   onClose: () => void;
-  onSubmitEmail: (email: string) => Promise<boolean>;
+  onSubmitEmail: (email: string) => Promise<"emailed" | "saved" | "local">;
   templateTitle: string;
 }) {
   const [email, setEmail] = useState("");
   const [submitState, setSubmitState] = useState<
-    "idle" | "submitting" | "success" | "local"
+    "idle" | "submitting" | "emailed" | "saved" | "local"
   >("idle");
 
   useEffect(() => {
@@ -2690,8 +2701,8 @@ function PostDownloadModal({
   async function submitEmail(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitState("submitting");
-    const savedToApi = await onSubmitEmail(email);
-    setSubmitState(savedToApi ? "success" : "local");
+    const result = await onSubmitEmail(email);
+    setSubmitState(result);
   }
 
   return (
@@ -2753,7 +2764,9 @@ function PostDownloadModal({
             <span>
               {submitState === "submitting"
                 ? "Saving..."
-                : submitState === "success"
+                : submitState === "emailed"
+                  ? "Email Sent"
+                  : submitState === "saved"
                   ? "Request Saved"
                   : submitState === "local"
                     ? "Saved Locally"
@@ -2762,9 +2775,15 @@ function PostDownloadModal({
           </button>
         </form>
 
-        {submitState === "success" ? (
+        {submitState === "emailed" ? (
           <p className="modal-status success">
-            Saved. This lead is now available in the admin dashboard.
+            Sent. Check your inbox for the editable signing workspace link.
+          </p>
+        ) : null}
+        {submitState === "saved" ? (
+          <p className="modal-status success">
+            Saved. Email delivery is not configured yet, but this lead is now
+            available in the admin dashboard.
           </p>
         ) : null}
         {submitState === "local" ? (
