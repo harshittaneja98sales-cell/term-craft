@@ -2,13 +2,16 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-const dataDir = process.env.DATA_DIR
+const primaryDataDir = process.env.DATA_DIR
   ? path.resolve(process.env.DATA_DIR)
   : process.env.NODE_ENV === "production"
     ? path.join(os.tmpdir(), "term-craft-data")
     : path.resolve(process.cwd(), "data");
-const leadsPath = path.join(dataDir, "leads.json");
-const eventsPath = path.join(dataDir, "analytics-events.json");
+const fallbackDataDir =
+  process.env.NODE_ENV === "production"
+    ? path.join(os.tmpdir(), "term-craft-data")
+    : primaryDataDir;
+let activeDataDir = primaryDataDir;
 const supabaseUrl = process.env.SUPABASE_URL?.replace(/\/$/, "");
 const supabaseKey =
   process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
@@ -44,18 +47,37 @@ export function getStorageInfo() {
   };
 }
 
-async function ensureStore(filePath) {
-  await fs.mkdir(dataDir, { recursive: true });
-
-  try {
-    await fs.access(filePath);
-  } catch {
-    await fs.writeFile(filePath, "[]\n", "utf8");
-  }
+function getCandidateDataDirs() {
+  return [...new Set([activeDataDir, primaryDataDir, fallbackDataDir])];
 }
 
-async function readJsonArray(filePath) {
-  await ensureStore(filePath);
+async function ensureStore(fileName) {
+  let lastError;
+
+  for (const candidateDir of getCandidateDataDirs()) {
+    const filePath = path.join(candidateDir, fileName);
+
+    try {
+      await fs.mkdir(candidateDir, { recursive: true });
+
+      try {
+        await fs.access(filePath);
+      } catch {
+        await fs.writeFile(filePath, "[]\n", "utf8");
+      }
+
+      activeDataDir = candidateDir;
+      return filePath;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError;
+}
+
+async function readJsonArray(fileName) {
+  const filePath = await ensureStore(fileName);
   const raw = await fs.readFile(filePath, "utf8");
 
   try {
@@ -66,31 +88,31 @@ async function readJsonArray(filePath) {
   }
 }
 
-async function writeJsonArray(filePath, records) {
-  await ensureStore(filePath);
+async function writeJsonArray(fileName, records) {
+  const filePath = await ensureStore(fileName);
   await fs.writeFile(filePath, `${JSON.stringify(records, null, 2)}\n`, "utf8");
 }
 
 async function readLocalLeads() {
-  return readJsonArray(leadsPath);
+  return readJsonArray("leads.json");
 }
 
 async function saveLocalLead(lead) {
   const leads = await readLocalLeads();
   const nextLeads = [lead, ...leads].slice(0, 5000);
-  await writeJsonArray(leadsPath, nextLeads);
+  await writeJsonArray("leads.json", nextLeads);
   return lead;
 }
 
 async function readLocalEvents(limit = 1000) {
-  const events = await readJsonArray(eventsPath);
+  const events = await readJsonArray("analytics-events.json");
   return events.slice(0, limit);
 }
 
 async function saveLocalEvent(event) {
   const events = await readLocalEvents(5000);
   const nextEvents = [event, ...events].slice(0, 10000);
-  await writeJsonArray(eventsPath, nextEvents);
+  await writeJsonArray("analytics-events.json", nextEvents);
   return event;
 }
 
