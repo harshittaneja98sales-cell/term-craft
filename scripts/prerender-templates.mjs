@@ -299,11 +299,11 @@ function renderPrivacyStaticContent() {
       <p>Term Craft collects only the information needed to provide free contract templates, PDF downloads, and optional follow-up for editable or signable versions.</p>
       <section>
         <h2>Information We Collect</h2>
-        <p>If you submit the post-download form, we collect your email address, the template you downloaded, the page path, timestamp, referrer, and UTM parameters when present. We do not submit the filled contract terms to the lead capture API.</p>
+        <p>If you submit the post-download form, we collect your email address, the template you downloaded, the page path, timestamp, referrer, and UTM parameters when present. We also collect first-party analytics events such as page views and template PDF downloads. We do not submit the filled contract terms to the lead capture API.</p>
       </section>
       <section>
         <h2>How We Use Information</h2>
-        <p>We use captured emails to follow up about editable or signable versions of downloaded templates, understand which template pages are working, and improve the product.</p>
+        <p>We use captured emails to follow up about editable or signable versions of downloaded templates, understand which template pages are working, measure download intent, and improve the product.</p>
       </section>
       <section>
         <h2>Local Drafts</h2>

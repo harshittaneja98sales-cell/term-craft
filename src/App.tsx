@@ -116,6 +116,37 @@ type LeadApiRecord = {
   userAgent: string;
 };
 
+type AnalyticsEventRecord = {
+  id: string;
+  eventName: string;
+  path: string;
+  templateTitle: string;
+  templatePath: string;
+  referrer: string;
+  utmSource: string;
+  utmMedium: string;
+  utmCampaign: string;
+  utmTerm: string;
+  utmContent: string;
+  metadata: Record<string, unknown>;
+  userAgent: string;
+  occurredAt: string;
+};
+
+type AnalyticsSummary = {
+  storage: {
+    provider: string;
+    durable: boolean;
+  };
+  totalEvents: number;
+  totalPageViews: number;
+  totalDownloads: number;
+  totalLeadCaptures: number;
+  topPaths: Array<{ label: string; count: number }>;
+  topTemplates: Array<{ label: string; count: number }>;
+  recentEvents: AnalyticsEventRecord[];
+};
+
 type B2BLeadGenerationForm = {
   clientName: string;
   providerName: string;
@@ -508,6 +539,40 @@ async function submitLeadCapture({
   }
 
   return response.json() as Promise<{ lead: LeadApiRecord }>;
+}
+
+function sendAnalyticsEvent(
+  eventName: string,
+  options: {
+    metadata?: Record<string, unknown>;
+    templatePath?: string;
+    templateTitle?: string;
+  } = {},
+) {
+  const payload = {
+    eventName,
+    metadata: options.metadata ?? {},
+    occurredAt: new Date().toISOString(),
+    path: window.location.pathname,
+    referrer: document.referrer,
+    templatePath: options.templatePath ?? "",
+    templateTitle: options.templateTitle ?? "",
+    utm: getUtmParams(),
+  };
+  const body = JSON.stringify(payload);
+
+  if ("sendBeacon" in navigator) {
+    const blob = new Blob([body], { type: "application/json" });
+    navigator.sendBeacon("/api/events", blob);
+    return;
+  }
+
+  void fetch("/api/events", {
+    body,
+    headers: { "Content-Type": "application/json" },
+    keepalive: true,
+    method: "POST",
+  }).catch(() => undefined);
 }
 
 function formatDate(value: string) {
@@ -2118,8 +2183,9 @@ function PrivacyPage() {
           <p>
             If you submit the post-download form, we collect your email address,
             the template you downloaded, the page path, timestamp, referrer, and
-            UTM parameters when present. We do not submit the filled contract
-            terms to the lead capture API.
+            UTM parameters when present. We also collect first-party analytics
+            events such as page views and template PDF downloads. We do not
+            submit the filled contract terms to the lead capture API.
           </p>
         </section>
 
@@ -2128,7 +2194,7 @@ function PrivacyPage() {
           <p>
             We use captured emails to follow up about editable or signable
             versions of downloaded templates, understand which template pages are
-            working, and improve the product.
+            working, measure download intent, and improve the product.
           </p>
         </section>
 
@@ -2154,6 +2220,14 @@ function PrivacyPage() {
 
 function AdminLeadsPage() {
   const [leads, setLeads] = useState<LeadApiRecord[]>([]);
+  const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
+  const [adminKey, setAdminKey] = useState(() => {
+    try {
+      return sessionStorage.getItem("termcraft.admin-key") ?? "";
+    } catch {
+      return "";
+    }
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -2164,18 +2238,36 @@ function AdminLeadsPage() {
   });
   useRobotsMeta("noindex,nofollow");
 
-  async function loadLeads() {
+  function adminHeaders() {
+    return adminKey ? { "x-admin-key": adminKey } : undefined;
+  }
+
+  async function loadDashboard() {
     setIsLoading(true);
     setError("");
 
     try {
-      const response = await fetch("/api/leads");
-      if (!response.ok) {
-        throw new Error("Could not load leads.");
+      const headers = adminHeaders();
+      const [leadsResponse, analyticsResponse] = await Promise.all([
+        fetch("/api/leads", { headers }),
+        fetch("/api/analytics", { headers }),
+      ]);
+
+      if (leadsResponse.status === 401 || analyticsResponse.status === 401) {
+        setError("Enter the admin API key to view private lead data.");
+        setLeads([]);
+        setAnalytics(null);
+        return;
       }
 
-      const data = (await response.json()) as { leads: LeadApiRecord[] };
+      if (!leadsResponse.ok || !analyticsResponse.ok) {
+        throw new Error("Could not load dashboard data.");
+      }
+
+      const data = (await leadsResponse.json()) as { leads: LeadApiRecord[] };
+      const analyticsData = (await analyticsResponse.json()) as AnalyticsSummary;
       setLeads(Array.isArray(data.leads) ? data.leads : []);
+      setAnalytics(analyticsData);
     } catch {
       setError("Lead API is unavailable. Run the app with npm run dev or npm start.");
     } finally {
@@ -2183,8 +2275,27 @@ function AdminLeadsPage() {
     }
   }
 
+  async function exportCsv() {
+    try {
+      const response = await fetch("/api/leads.csv", { headers: adminHeaders() });
+      if (response.status === 401) {
+        setError("Enter the admin API key before exporting leads.");
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error("CSV export failed.");
+      }
+
+      const csv = await response.text();
+      downloadBlob("term-craft-leads.csv", "text/csv;charset=utf-8", csv);
+    } catch {
+      setError("Could not export leads.");
+    }
+  }
+
   useEffect(() => {
-    void loadLeads();
+    void loadDashboard();
   }, []);
 
   return (
@@ -2202,16 +2313,46 @@ function AdminLeadsPage() {
             </p>
           </div>
           <div className="admin-actions">
-            <button className="button secondary" type="button" onClick={loadLeads}>
+            <button
+              className="button secondary"
+              type="button"
+              onClick={loadDashboard}
+            >
               <RotateCcw size={17} />
               <span>Refresh</span>
             </button>
-            <a className="button primary" href="/api/leads.csv">
+            <button className="button primary" type="button" onClick={exportCsv}>
               <Download size={17} />
               <span>Export CSV</span>
-            </a>
+            </button>
           </div>
         </section>
+
+        <form
+          className="admin-key-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            try {
+              sessionStorage.setItem("termcraft.admin-key", adminKey);
+            } catch {
+              // Session storage can be unavailable in strict browser modes.
+            }
+            void loadDashboard();
+          }}
+        >
+          <Field label="Admin API key">
+            <input
+              type="password"
+              placeholder="Only required if ADMIN_API_KEY is set"
+              value={adminKey}
+              onChange={(event) => setAdminKey(event.target.value)}
+            />
+          </Field>
+          <button className="button secondary" type="submit">
+            <ShieldCheck size={17} />
+            <span>Apply key</span>
+          </button>
+        </form>
 
         <section className="admin-metrics">
           <Metric label="Total leads" value={`${leads.length}`} />
@@ -2223,9 +2364,44 @@ function AdminLeadsPage() {
             label="Templates"
             value={`${new Set(leads.map((lead) => lead.templatePath)).size}`}
           />
+          <Metric
+            label="Page views"
+            value={`${analytics?.totalPageViews ?? 0}`}
+          />
+          <Metric
+            label="PDF downloads"
+            value={`${analytics?.totalDownloads ?? 0}`}
+          />
+          <Metric
+            label="Storage"
+            value={analytics?.storage.durable ? "Supabase" : "Local JSON"}
+          />
         </section>
 
         {error ? <div className="admin-alert">{error}</div> : null}
+
+        {analytics ? (
+          <section className="admin-analytics-grid">
+            <AnalyticsPanel title="Top Pages" rows={analytics.topPaths} />
+            <AnalyticsPanel title="Top Templates" rows={analytics.topTemplates} />
+            <div className="admin-analytics-panel">
+              <h2>Recent Events</h2>
+              {analytics.recentEvents.length === 0 ? (
+                <p>No events captured yet.</p>
+              ) : (
+                <ul>
+                  {analytics.recentEvents.slice(0, 8).map((event) => (
+                    <li key={event.id}>
+                      <strong>{event.eventName.replace(/_/g, " ")}</strong>
+                      <span>{event.path || event.templateTitle || "Unknown"}</span>
+                      <small>{formatTimestamp(event.occurredAt)}</small>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </section>
+        ) : null}
 
         <section className="leads-table-wrap">
           {isLoading ? (
@@ -2268,6 +2444,32 @@ function AdminLeadsPage() {
           )}
         </section>
       </main>
+    </div>
+  );
+}
+
+function AnalyticsPanel({
+  rows,
+  title,
+}: {
+  rows: Array<{ label: string; count: number }>;
+  title: string;
+}) {
+  return (
+    <div className="admin-analytics-panel">
+      <h2>{title}</h2>
+      {rows.length === 0 ? (
+        <p>No data captured yet.</p>
+      ) : (
+        <ul>
+          {rows.map((row) => (
+            <li key={row.label}>
+              <strong>{row.label}</strong>
+              <span>{row.count}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -2321,6 +2523,11 @@ function SeoTemplatePage({ config }: { config: SeoTemplateConfig }) {
       downloadedAt,
     };
     saveTemplateDownloadLead(leadRecord);
+    sendAnalyticsEvent("template_pdf_downloaded", {
+      metadata: { downloadedAt },
+      templatePath: config.path,
+      templateTitle: config.contractTitle,
+    });
     setDownloadContext({ downloadedAt, id: leadRecord.id });
     setPostDownloadOpen(true);
   }
@@ -3902,6 +4109,19 @@ function SignatureCapture({
 function App() {
   const pathname = window.location.pathname.replace(/\/$/, "");
   const seoTemplateConfig = seoTemplateConfigs[pathname];
+  const analyticsTemplatePath = seoTemplateConfig?.path ?? "";
+  const analyticsTemplateTitle = seoTemplateConfig?.contractTitle ?? "";
+
+  useEffect(() => {
+    if (pathname.startsWith("/admin")) {
+      return;
+    }
+
+    sendAnalyticsEvent("page_view", {
+      templatePath: analyticsTemplatePath,
+      templateTitle: analyticsTemplateTitle,
+    });
+  }, [analyticsTemplatePath, analyticsTemplateTitle, pathname]);
 
   if (pathname === "") {
     return <HomePage />;
