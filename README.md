@@ -8,7 +8,7 @@ Term Craft is a SaaS contract generator and e-signature starter focused on SEO l
 
 This repo includes a `render.yaml` Blueprint for a Node web service:
 
-- Build command used by Render: `npm ci && npm run build`
+- Build command used by Render: `npm ci --include=dev && npm run build`
 - Start command: `npm start`
 - Production URL: `https://usetermcraft.com`
 
