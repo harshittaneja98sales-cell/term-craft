@@ -8,12 +8,11 @@ Term Craft is a SaaS contract generator and e-signature starter focused on SEO l
 
 This repo includes a `render.yaml` Blueprint for a Node web service:
 
-- Build command: `npm install && npm run build`
+- Build command used by Render: `npm ci && npm run build`
 - Start command: `npm start`
 - Production URL: `https://usetermcraft.com`
 - Lead storage directory: `/var/data`
-- Persistent disk: `lead-data`, 1 GB
 
-Because lead capture currently writes to the local filesystem, the service uses Render's `starter` plan with a persistent disk. Free Render web services do not preserve local filesystem changes across deploys or restarts.
+Because lead capture currently writes to the local filesystem, keep the service on a paid web service plan and add a persistent disk from the Render dashboard after the first deploy if you want captured emails to survive deploys and restarts. Free Render web services do not preserve local filesystem changes across deploys or restarts.
 
-For a private GitHub repo, install Render's GitHub App on this repository before using the deploy button. After Render creates the service, add the DNS records it provides in GoDaddy for `usetermcraft.com`.
+For a private GitHub repo, install Render's GitHub App on this repository before using the deploy button. After Render creates the service, add `usetermcraft.com` from the service's Custom Domains page and copy the DNS records Render provides into GoDaddy.
