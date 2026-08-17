@@ -1984,6 +1984,8 @@ function getTemplateTags(config: SeoTemplateConfig) {
 }
 
 function PublicHeader() {
+  const currentPath = typeof window !== "undefined" ? window.location.pathname : "/";
+
   return (
     <header className="topbar template-topbar no-print">
       <a className="brand brand-link" href="/" aria-label="Term Craft home">
@@ -1992,14 +1994,19 @@ function PublicHeader() {
         </div>
         <div>
           <strong>Term Craft</strong>
-          <span>Free contract templates</span>
+          <span>B2B Workflow & Compliance Engine</span>
         </div>
       </a>
 
       <nav className="public-nav" aria-label="Primary navigation">
-        <a href="/templates">Templates</a>
-        <a href="/builder">Builder</a>
-        <a href="/privacy">Privacy</a>
+        <a className={currentPath === "/" ? "active" : ""} href="/">Home</a>
+        <a className={currentPath.startsWith("/templates") ? "active" : ""} href="/templates">Templates</a>
+        <a className={currentPath === "/builder" ? "active" : ""} href="/builder">Contract Studio</a>
+        <a className={currentPath === "/privacy" ? "active" : ""} href="/privacy">Privacy</a>
+        <a className="button primary" href="/builder">
+          <Wand2 size={16} />
+          <span>New Contract</span>
+        </a>
       </nav>
     </header>
   );
@@ -2007,12 +2014,19 @@ function PublicHeader() {
 
 function HomePage() {
   const featuredTemplates = seoTemplateList.slice(0, 3);
+  const [searchFilter, setSearchFilter] = useState("");
 
   usePageMetadata({
     canonicalPath: "/",
-    title: "Free Contract Templates With Instant PDF Download | Term Craft",
+    title: "Free B2B Contract Templates & Compliance Workflow | Term Craft",
     description:
       "Generate clean, unwatermarked contract PDFs from free templates for marketing agencies, SEO retainers, lead generation, subcontractors, NDAs, and web development.",
+  });
+
+  const filteredFeatured = seoTemplateList.filter((t) => {
+    if (!searchFilter.trim()) return true;
+    const q = searchFilter.toLowerCase();
+    return t.h1.toLowerCase().includes(q) || t.intro.toLowerCase().includes(q);
   });
 
   return (
@@ -2023,31 +2037,35 @@ function HomePage() {
         <section className="home-hero">
           <div className="home-hero-inner">
             <div className="hero-copy">
-              <div className="template-kicker">Free PDF contract templates</div>
-              <h1>Generate clean contracts from simple forms.</h1>
+              <div className="template-kicker">✨ Programmatic SEO Native B2B Engine</div>
+              <h1>Generate Clean B2B Contracts & Compliance Workflows</h1>
               <p>
-                Pick a template, fill in the core terms, preview the agreement,
-                and download a clean, unwatermarked PDF instantly.
+                Select a niche B2B agreement, customize core dynamic clauses (GDPR, SOC2, SLA credits, Auto-renewal shields), preview in real-time, and download unwatermarked PDFs.
               </p>
               <div className="hero-actions">
                 <a className="button primary" href="/templates">
                   <FileText size={18} />
-                  <span>Browse Templates</span>
+                  <span>Browse All Templates</span>
                 </a>
                 <a className="button secondary" href="/builder">
                   <PenLine size={18} />
-                  <span>Open Builder</span>
+                  <span>Open Contract Studio</span>
                 </a>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '20px', marginTop: '16px', color: 'var(--muted)', fontSize: '13px', fontWeight: 600 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><ShieldCheck size={16} color="var(--teal)" /> 100% Free Unwatermarked PDF</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><CheckCircle2 size={16} color="var(--teal)" /> Audit Trail Logging</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}><UserCheck size={16} color="var(--teal)" /> E-Signature Verification</span>
               </div>
             </div>
 
             <div className="hero-document" aria-hidden="true">
               <div className="mini-document">
-                <div className="mini-document-meta">Draft | Free PDF</div>
+                <div className="mini-document-meta">B2B Compliance | Clean PDF</div>
                 <h2>Marketing Agency Mutual NDA</h2>
                 <p>
-                  Client list protection, campaign strategy confidentiality,
-                  and duration of non-disclosure.
+                  Client list protection, campaign strategy confidentiality, SLA compliance, and duration of non-disclosure.
                 </p>
                 <div className="mini-lines">
                   <span />
@@ -2067,10 +2085,9 @@ function HomePage() {
         <section className="home-section">
           <div className="home-section-header">
             <div>
-              <h2>Popular Contract Templates</h2>
+              <h2>Featured B2B Templates</h2>
               <p>
-                Start with SEO-focused pages built around real search intent and
-                practical dynamic fields.
+                Engineered for programmatic SEO acquisition, instant form generation, and compliance legal drafting.
               </p>
             </div>
             <a className="text-link" href="/templates">
@@ -2079,8 +2096,19 @@ function HomePage() {
             </a>
           </div>
 
+          <div style={{ marginBottom: '20px', maxWidth: '440px', position: 'relative' }}>
+            <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
+            <input
+              type="text"
+              placeholder="Search templates (e.g. SEO, SLA, Retainer, NDA)..."
+              value={searchFilter}
+              onChange={(e) => setSearchFilter(e.target.value)}
+              style={{ paddingLeft: '40px' }}
+            />
+          </div>
+
           <div className="template-link-grid">
-            {featuredTemplates.map((template) => (
+            {filteredFeatured.slice(0, 6).map((template) => (
               <TemplateLinkCard key={template.path} template={template} />
             ))}
           </div>
@@ -2088,15 +2116,14 @@ function HomePage() {
 
         <section className="home-band">
           <div>
-            <h2>Built for organic acquisition.</h2>
+            <h2>Programmatic SEO & Organic Growth Engine</h2>
             <p>
-              Every template has a clean URL, targeted metadata, internal links,
-              static HTML output, and a clear download action.
+              Every document landing page features clean HTML pre-rendering, targeted metadata, structured schema, internal link graphs, and one-click PDF generation.
             </p>
           </div>
           <a className="button primary" href="/templates">
             <Search size={18} />
-            <span>Explore SEO Pages</span>
+            <span>Explore Directory</span>
           </a>
         </section>
       </main>
@@ -2105,11 +2132,23 @@ function HomePage() {
 }
 
 function TemplatesDirectoryPage() {
+  const [searchTerm, setSearchTerm] = useState("");
+
   usePageMetadata({
     canonicalPath: "/templates",
-    title: "Free Contract Template Directory | Term Craft",
+    title: "Free B2B Contract Template Directory | Term Craft",
     description:
       "Browse free contract templates for lead generation retainers, SEO agency MSAs, subcontractor agreements, e-commerce web development contracts, and marketing agency NDAs.",
+  });
+
+  const filteredTemplates = seoTemplateList.filter((t) => {
+    if (!searchTerm.trim()) return true;
+    const q = searchTerm.toLowerCase();
+    return (
+      t.h1.toLowerCase().includes(q) ||
+      t.intro.toLowerCase().includes(q) ||
+      t.title.toLowerCase().includes(q)
+    );
   });
 
   return (
@@ -2119,24 +2158,44 @@ function TemplatesDirectoryPage() {
       <main className="templates-directory">
         <section className="directory-header">
           <div className="template-kicker">Template directory</div>
-          <h1>Free contract templates with instant PDF download.</h1>
+          <h1>Free B2B Contract Templates with Instant PDF Download</h1>
           <p>
-            Choose a template page, fill in the terms, preview the agreement,
-            and download a clean PDF without a watermark.
+            Choose a legal template, fill in the core terms, preview the agreement,
+            and download a clean PDF without any watermark.
           </p>
+
+          <div style={{ marginTop: '20px', maxWidth: '480px', position: 'relative' }}>
+            <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
+            <input
+              type="text"
+              placeholder="Search templates (e.g. Lead Gen, SEO, Web Dev, Subcontractor)..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              style={{ paddingLeft: '40px', minHeight: '44px', borderRadius: '10px' }}
+            />
+          </div>
         </section>
 
         <section className="template-link-grid directory-grid" aria-label="Contract templates">
-          {seoTemplateList.map((template) => (
-            <TemplateLinkCard key={template.path} template={template} />
-          ))}
+          {filteredTemplates.length > 0 ? (
+            filteredTemplates.map((template) => (
+              <TemplateLinkCard key={template.path} template={template} />
+            ))
+          ) : (
+            <div className="empty-state" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '32px' }}>
+              <p>No contract templates match "{searchTerm}".</p>
+              <button className="button secondary" onClick={() => setSearchTerm("")} style={{ marginTop: '12px' }}>
+                Clear Search Filter
+              </button>
+            </div>
+          )}
         </section>
 
         <section className="directory-seo-copy">
-          <h2>Why These Templates Are Built This Way</h2>
+          <h2>Programmatic Compliance Architecture</h2>
           <p>
-            Each template focuses on a specific contract search query and only
-            asks for the fields needed to generate a useful first draft. The
+            Each template is built around specific search intent queries and only
+            asks for the fields needed to generate a useful legal first draft. The
             pages are designed for fast scanning, internal linking, and direct
             PDF generation.
           </p>
@@ -2152,7 +2211,7 @@ function TemplateLinkCard({ template }: { template: SeoTemplateConfig }) {
   return (
     <article className="template-link-card">
       <div className="template-link-icon" aria-hidden="true">
-        <FileText size={20} />
+        <FileText size={22} />
       </div>
       <h3>{template.h1.replace(" Template", "")}</h3>
       <p>{template.intro}</p>
@@ -2591,14 +2650,24 @@ function SeoTemplatePage({ config }: { config: SeoTemplateConfig }) {
               ))}
             </div>
 
-            <button
-              className="button primary full-width template-download"
-              type="button"
-              onClick={downloadTemplatePdf}
-            >
-              <Download size={18} />
-              <span>Download Free PDF</span>
-            </button>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <button
+                className="button primary template-download"
+                type="button"
+                onClick={downloadTemplatePdf}
+              >
+                <Download size={18} />
+                <span>Download PDF</span>
+              </button>
+              <a
+                className="button secondary template-download"
+                href="/builder"
+                style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Wand2 size={18} />
+                <span>Open Studio</span>
+              </a>
+            </div>
           </div>
 
           <div className="template-preview-panel">
@@ -3314,15 +3383,21 @@ function ContractBuilderApp() {
   return (
     <div className="app">
       <header className="topbar no-print">
-        <div className="brand">
+        <a className="brand brand-link" href="/" aria-label="Term Craft home">
           <div className="brand-mark" aria-hidden="true">
             <FileCheck2 size={22} />
           </div>
           <div>
             <strong>Term Craft</strong>
-            <span>Contracts</span>
+            <span>Contract Studio</span>
           </div>
-        </div>
+        </a>
+
+        <nav className="public-nav" style={{ margin: '0 12px 0 auto' }}>
+          <a href="/">Home</a>
+          <a href="/templates">Templates</a>
+          <a href="/admin/leads">Admin</a>
+        </nav>
 
         <div className="topbar-actions">
           <StatusPill status={status} />
@@ -3344,7 +3419,7 @@ function ContractBuilderApp() {
             onClick={downloadPdf}
           >
             <Download size={17} />
-            <span>Download Free PDF</span>
+            <span>Download PDF</span>
           </button>
         </div>
       </header>

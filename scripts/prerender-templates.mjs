@@ -206,16 +206,20 @@ function renderPublicHeaderStatic() {
   return `
     <header class="topbar template-topbar no-print">
       <a class="brand brand-link" href="/" aria-label="Term Craft home">
-        <div class="brand-mark" aria-hidden="true"></div>
+        <div class="brand-mark" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="m9 15 2 2 4-4"/></svg>
+        </div>
         <div>
           <strong>Term Craft</strong>
-          <span>Free contract templates</span>
+          <span>B2B Workflow & Compliance Engine</span>
         </div>
       </a>
       <nav class="public-nav" aria-label="Primary navigation">
+        <a href="/">Home</a>
         <a href="/templates">Templates</a>
-        <a href="/builder">Builder</a>
+        <a href="/builder">Contract Studio</a>
         <a href="/privacy">Privacy</a>
+        <a class="button primary" href="/builder" style="margin-left: 6px;">New Contract</a>
       </nav>
     </header>
   `;
@@ -227,19 +231,24 @@ function renderHomeStaticContent() {
       <section class="home-hero">
         <div class="home-hero-inner">
           <div class="hero-copy">
-            <div class="template-kicker">Free PDF contract templates</div>
-            <h1>Generate clean contracts from simple forms.</h1>
-            <p>Pick a template, fill in the core terms, preview the agreement, and download a clean, unwatermarked PDF instantly.</p>
+            <div class="template-kicker">✨ Programmatic SEO Native B2B Engine</div>
+            <h1>Generate Clean B2B Contracts & Compliance Workflows</h1>
+            <p>Select a niche B2B agreement, customize core dynamic clauses (GDPR, SOC2, SLA credits, Auto-renewal shields), preview in real-time, and download unwatermarked PDFs.</p>
             <div class="hero-actions">
-              <a class="button primary" href="/templates">Browse Templates</a>
-              <a class="button secondary" href="/builder">Open Builder</a>
+              <a class="button primary" href="/templates">Browse All Templates</a>
+              <a class="button secondary" href="/builder">Open Contract Studio</a>
+            </div>
+            <div style="display: flex; align-items: center; gap: 20px; margin-top: 16px; color: var(--muted); font-size: 13px; font-weight: 600;">
+              <span>🛡️ 100% Free Unwatermarked PDF</span>
+              <span>✔️ Audit Trail Logging</span>
+              <span>👤 E-Signature Verification</span>
             </div>
           </div>
           <div class="hero-document" aria-hidden="true">
             <div class="mini-document">
-              <div class="mini-document-meta">Draft | Free PDF</div>
+              <div class="mini-document-meta">B2B Compliance | Clean PDF</div>
               <h2>Marketing Agency Mutual NDA</h2>
-              <p>Client list protection, campaign strategy confidentiality, and duration of non-disclosure.</p>
+              <p>Client list protection, campaign strategy confidentiality, SLA compliance, and duration of non-disclosure.</p>
               <div class="mini-lines"><span></span><span></span><span></span><span></span></div>
               <div class="mini-signatures"><span></span><span></span></div>
             </div>
@@ -249,10 +258,10 @@ function renderHomeStaticContent() {
       <section class="home-section">
         <div class="home-section-header">
           <div>
-            <h2>Popular Contract Templates</h2>
-            <p>Start with SEO-focused pages built around real search intent and practical dynamic fields.</p>
+            <h2>Featured B2B Templates</h2>
+            <p>Engineered for programmatic SEO acquisition, instant form generation, and compliance legal drafting.</p>
           </div>
-          <a class="text-link" href="/templates">View all templates</a>
+          <a class="text-link" href="/templates">View all templates →</a>
         </div>
         <div class="template-link-grid">
           ${pages
@@ -263,10 +272,10 @@ function renderHomeStaticContent() {
       </section>
       <section class="home-band">
         <div>
-          <h2>Built for organic acquisition.</h2>
-          <p>Every template has a clean URL, targeted metadata, internal links, static HTML output, and a clear download action.</p>
+          <h2>Programmatic SEO & Organic Growth Engine</h2>
+          <p>Every document landing page features clean HTML pre-rendering, targeted metadata, structured schema, internal link graphs, and one-click PDF generation.</p>
         </div>
-        <a class="button primary" href="/templates">Explore SEO Pages</a>
+        <a class="button primary" href="/templates">Explore Directory</a>
       </section>
     </main>
   `;
@@ -277,15 +286,15 @@ function renderTemplatesDirectoryStaticContent() {
     <main class="templates-directory">
       <section class="directory-header">
         <div class="template-kicker">Template directory</div>
-        <h1>Free contract templates with instant PDF download.</h1>
-        <p>Choose a template page, fill in the terms, preview the agreement, and download a clean PDF without a watermark.</p>
+        <h1>Free B2B Contract Templates with Instant PDF Download</h1>
+        <p>Choose a legal template, fill in the core terms, preview the agreement, and download a clean PDF without any watermark.</p>
       </section>
       <section class="template-link-grid directory-grid" aria-label="Contract templates">
         ${pages.map((page) => renderTemplateCard(page)).join("")}
       </section>
       <section class="directory-seo-copy">
-        <h2>Why These Templates Are Built This Way</h2>
-        <p>Each template focuses on a specific contract search query and only asks for the fields needed to generate a useful first draft.</p>
+        <h2>Programmatic Compliance Architecture</h2>
+        <p>Each template is built around specific search intent queries and only asks for the fields needed to generate a useful legal first draft.</p>
       </section>
     </main>
   `;
@@ -362,10 +371,10 @@ for (const page of pages) {
 
 const homePage = {
   path: "/",
-  title: "Free Contract Templates With Instant PDF Download | Term Craft",
+  title: "Free B2B Contract Templates & Compliance Workflow | Term Craft",
   description:
     "Generate clean, unwatermarked contract PDFs from free templates for marketing agencies, SEO retainers, lead generation, subcontractors, NDAs, and web development.",
-  h1: "Generate clean contracts from simple forms.",
+  h1: "Generate Clean B2B Contracts & Compliance Workflows",
 };
 
 const templatesDirectoryPage = {
