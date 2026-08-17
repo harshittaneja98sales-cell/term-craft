@@ -2,7 +2,7 @@ services:
   - type: web
     name: term-craft
     runtime: node
-    plan: starter
+    plan: free
     buildCommand: npm ci && npm run build
     startCommand: npm start
     healthCheckPath: /
@@ -11,5 +11,3 @@ services:
         value: production
       - key: SITE_URL
         value: https://usetermcraft.com
-      - key: DATA_DIR
-        value: /var/data

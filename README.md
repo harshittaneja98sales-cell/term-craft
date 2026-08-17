@@ -11,8 +11,7 @@ This repo includes a `render.yaml` Blueprint for a Node web service:
 - Build command used by Render: `npm ci && npm run build`
 - Start command: `npm start`
 - Production URL: `https://usetermcraft.com`
-- Lead storage directory: `/var/data`
 
-Because lead capture currently writes to the local filesystem, keep the service on a paid web service plan and add a persistent disk from the Render dashboard after the first deploy if you want captured emails to survive deploys and restarts. Free Render web services do not preserve local filesystem changes across deploys or restarts.
+The first deploy uses Render's free web service plan so the site can go live without a billing step. Lead capture currently writes to the local filesystem, so captured emails are not durable on the free plan. Move leads to a database or upgrade the service and add persistent storage before depending on it for production lead collection.
 
 For a private GitHub repo, install Render's GitHub App on this repository before using the deploy button. After Render creates the service, add `usetermcraft.com` from the service's Custom Domains page and copy the DNS records Render provides into GoDaddy.
