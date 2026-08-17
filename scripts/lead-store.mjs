@@ -1,9 +1,12 @@
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 
 const dataDir = process.env.DATA_DIR
   ? path.resolve(process.env.DATA_DIR)
-  : path.resolve(process.cwd(), "data");
+  : process.env.NODE_ENV === "production"
+    ? path.join(os.tmpdir(), "term-craft-data")
+    : path.resolve(process.cwd(), "data");
 const leadsPath = path.join(dataDir, "leads.json");
 const eventsPath = path.join(dataDir, "analytics-events.json");
 const supabaseUrl = process.env.SUPABASE_URL?.replace(/\/$/, "");
