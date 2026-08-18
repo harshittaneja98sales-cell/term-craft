@@ -3,6 +3,7 @@ import path from "node:path";
 
 const siteUrl = process.env.SITE_URL?.replace(/\/$/, "");
 const sitemapBaseUrl = siteUrl || "https://usetermcraft.com";
+const schemaBaseUrl = sitemapBaseUrl.replace(/\/$/, "");
 const distDir = path.resolve(process.cwd(), "dist");
 const shellPath = path.join(distDir, "index.html");
 const shell = fs.readFileSync(shellPath, "utf8");
@@ -390,23 +391,184 @@ function renderTemplateCard(page) {
   `;
 }
 
+function absoluteUrl(pagePath) {
+  return pagePath === "/" ? schemaBaseUrl : `${schemaBaseUrl}${pagePath}`;
+}
+
+function serializeJsonLd(schema) {
+  return JSON.stringify(schema).replace(/</g, "\\u003c");
+}
+
+function buildGenericStructuredData(page) {
+  const pageUrl = absoluteUrl(page.path);
+  const organizationId = `${schemaBaseUrl}/#organization`;
+  const websiteId = `${schemaBaseUrl}/#website`;
+
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": organizationId,
+        name: "Term Craft",
+        url: schemaBaseUrl,
+      },
+      {
+        "@type": "WebSite",
+        "@id": websiteId,
+        name: "Term Craft",
+        url: schemaBaseUrl,
+        publisher: { "@id": organizationId },
+      },
+      {
+        "@type": "WebPage",
+        "@id": `${pageUrl}#webpage`,
+        url: pageUrl,
+        name: page.h1,
+        headline: page.h1,
+        description: page.description,
+        isPartOf: { "@id": websiteId },
+        publisher: { "@id": organizationId },
+      },
+    ],
+  };
+}
+
+function buildTemplateStructuredData(page) {
+  const relatedPages = getRelatedPages(page);
+  const pageUrl = absoluteUrl(page.path);
+  const organizationId = `${schemaBaseUrl}/#organization`;
+  const websiteId = `${schemaBaseUrl}/#website`;
+  const templateName = page.h1.replace(" Template", "");
+  const templateId = `${pageUrl}#template`;
+  const breadcrumbId = `${pageUrl}#breadcrumb`;
+  const faqId = `${pageUrl}#faq`;
+  const relatedListId = `${pageUrl}#related-templates`;
+
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": organizationId,
+        name: "Term Craft",
+        url: schemaBaseUrl,
+      },
+      {
+        "@type": "WebSite",
+        "@id": websiteId,
+        name: "Term Craft",
+        url: schemaBaseUrl,
+        publisher: { "@id": organizationId },
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": breadcrumbId,
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: "Home",
+            item: schemaBaseUrl,
+          },
+          {
+            "@type": "ListItem",
+            position: 2,
+            name: "Templates",
+            item: absoluteUrl("/templates"),
+          },
+          {
+            "@type": "ListItem",
+            position: 3,
+            name: templateName,
+            item: pageUrl,
+          },
+        ],
+      },
+      {
+        "@type": "WebPage",
+        "@id": `${pageUrl}#webpage`,
+        url: pageUrl,
+        name: page.h1,
+        headline: page.h1,
+        description: page.description,
+        isPartOf: { "@id": websiteId },
+        publisher: { "@id": organizationId },
+        breadcrumb: { "@id": breadcrumbId },
+        mainEntity: { "@id": templateId },
+        hasPart: [{ "@id": faqId }, { "@id": relatedListId }],
+        relatedLink: relatedPages.map((relatedPage) =>
+          absoluteUrl(relatedPage.path),
+        ),
+      },
+      {
+        "@type": "DigitalDocument",
+        "@id": templateId,
+        name: templateName,
+        headline: page.h1,
+        description: page.intro,
+        url: pageUrl,
+        inLanguage: "en-US",
+        encodingFormat: "application/pdf",
+        isAccessibleForFree: true,
+        creator: { "@id": organizationId },
+        provider: { "@id": organizationId },
+        about: page.cards.map(([title, body]) => ({
+          "@type": "Thing",
+          name: title,
+          description: body,
+        })),
+        offers: {
+          "@type": "Offer",
+          url: pageUrl,
+          price: "0",
+          priceCurrency: "USD",
+          availability: "https://schema.org/InStock",
+        },
+      },
+      {
+        "@type": "FAQPage",
+        "@id": faqId,
+        url: `${pageUrl}#faq`,
+        name: `${templateName} FAQ`,
+        mainEntity: page.faq.map(([question, answer]) => ({
+          "@type": "Question",
+          name: question,
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: answer,
+          },
+        })),
+      },
+      {
+        "@type": "ItemList",
+        "@id": relatedListId,
+        name: "Related Contract Templates",
+        itemListElement: relatedPages.map((relatedPage, index) => ({
+          "@type": "ListItem",
+          position: index + 1,
+          name: relatedPage.h1.replace(" Template", ""),
+          url: absoluteUrl(relatedPage.path),
+        })),
+      },
+    ],
+  };
+}
+
 function renderHtml(page, staticContent = renderStaticContent(page)) {
   const canonical = siteUrl
     ? `<link rel="canonical" href="${siteUrl}${page.path}" />`
     : "";
-  const schema = {
-    "@context": "https://schema.org",
-    "@type": "WebPage",
-    name: page.h1,
-    description: page.description,
-    url: siteUrl ? `${siteUrl}${page.path}` : page.path,
-  };
+  const schema =
+    page.path.startsWith("/templates/") && Array.isArray(page.faq)
+      ? buildTemplateStructuredData(page)
+      : buildGenericStructuredData(page);
 
   return shell
     .replace(/<title>.*?<\/title>/, `<title>${escapeHtml(page.title)}</title>`)
     .replace(
       "</head>",
-      `<meta name="description" content="${escapeHtml(page.description)}" />${canonical}<script type="application/ld+json">${JSON.stringify(schema)}</script></head>`,
+      `<meta name="description" content="${escapeHtml(page.description)}" />${canonical}<script id="termcraft-structured-data" type="application/ld+json">${serializeJsonLd(schema)}</script></head>`,
     )
     .replace(
       '<div id="root"></div>',

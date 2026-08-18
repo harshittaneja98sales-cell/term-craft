@@ -1145,6 +1145,29 @@ function useRobotsMeta(content: string) {
   }, [content]);
 }
 
+function useJsonLd(schema: unknown | null) {
+  useEffect(() => {
+    const scriptId = "termcraft-structured-data";
+    let schemaScript = document.querySelector<HTMLScriptElement>(
+      `script#${scriptId}`,
+    );
+
+    if (!schema) {
+      schemaScript?.remove();
+      return;
+    }
+
+    if (!schemaScript) {
+      schemaScript = document.createElement("script");
+      schemaScript.id = scriptId;
+      schemaScript.type = "application/ld+json";
+      document.head.appendChild(schemaScript);
+    }
+
+    schemaScript.textContent = JSON.stringify(schema);
+  }, [schema]);
+}
+
 type TemplateIconKey = "users" | "money" | "target" | "database";
 
 type SeoTemplateField = {
@@ -1989,6 +2012,135 @@ function getRelatedTemplates(config: SeoTemplateConfig) {
     .slice(0, 4);
 }
 
+function absoluteUrl(origin: string, pagePath: string) {
+  return pagePath === "/" ? origin : `${origin}${pagePath}`;
+}
+
+function createTemplateStructuredData(
+  config: SeoTemplateConfig,
+  relatedTemplates: SeoTemplateConfig[],
+  origin: string,
+) {
+  const siteUrl = origin.replace(/\/$/, "");
+  const pageUrl = absoluteUrl(siteUrl, config.path);
+  const organizationId = `${siteUrl}/#organization`;
+  const websiteId = `${siteUrl}/#website`;
+  const webpageId = `${pageUrl}#webpage`;
+  const templateId = `${pageUrl}#template`;
+  const breadcrumbId = `${pageUrl}#breadcrumb`;
+  const faqId = `${pageUrl}#faq`;
+  const relatedListId = `${pageUrl}#related-templates`;
+
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": organizationId,
+        name: "Term Craft",
+        url: siteUrl,
+      },
+      {
+        "@type": "WebSite",
+        "@id": websiteId,
+        name: "Term Craft",
+        url: siteUrl,
+        publisher: { "@id": organizationId },
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": breadcrumbId,
+        itemListElement: [
+          {
+            "@type": "ListItem",
+            position: 1,
+            name: "Home",
+            item: siteUrl,
+          },
+          {
+            "@type": "ListItem",
+            position: 2,
+            name: "Templates",
+            item: absoluteUrl(siteUrl, "/templates"),
+          },
+          {
+            "@type": "ListItem",
+            position: 3,
+            name: config.h1.replace(" Template", ""),
+            item: pageUrl,
+          },
+        ],
+      },
+      {
+        "@type": "WebPage",
+        "@id": webpageId,
+        url: pageUrl,
+        name: config.h1,
+        headline: config.h1,
+        description: config.metaDescription,
+        isPartOf: { "@id": websiteId },
+        publisher: { "@id": organizationId },
+        breadcrumb: { "@id": breadcrumbId },
+        mainEntity: { "@id": templateId },
+        hasPart: [{ "@id": faqId }, { "@id": relatedListId }],
+        relatedLink: relatedTemplates.map((template) =>
+          absoluteUrl(siteUrl, template.path),
+        ),
+      },
+      {
+        "@type": "DigitalDocument",
+        "@id": templateId,
+        name: config.contractTitle,
+        headline: config.h1,
+        description: config.intro,
+        url: pageUrl,
+        inLanguage: "en-US",
+        encodingFormat: "application/pdf",
+        isAccessibleForFree: true,
+        creator: { "@id": organizationId },
+        provider: { "@id": organizationId },
+        about: config.seo.cards.map((card) => ({
+          "@type": "Thing",
+          name: card.title,
+          description: card.body,
+        })),
+        offers: {
+          "@type": "Offer",
+          url: pageUrl,
+          price: "0",
+          priceCurrency: "USD",
+          availability: "https://schema.org/InStock",
+        },
+      },
+      {
+        "@type": "FAQPage",
+        "@id": faqId,
+        url: `${pageUrl}#faq`,
+        name: `${config.contractTitle} FAQ`,
+        mainEntity: config.seo.faqs.map((faq) => ({
+          "@type": "Question",
+          name: faq.question,
+          acceptedAnswer: {
+            "@type": "Answer",
+            text: faq.answer,
+          },
+        })),
+      },
+      {
+        "@type": "ItemList",
+        "@id": relatedListId,
+        name: "Related Contract Templates",
+        itemListElement: relatedTemplates.map((template, index) => ({
+          "@type": "ListItem",
+          position: index + 1,
+          name: template.h1.replace(" Template", ""),
+          url: absoluteUrl(siteUrl, template.path),
+        })),
+      },
+    ],
+  };
+}
+
 function TemplateBreadcrumbs({ config }: { config: SeoTemplateConfig }) {
   return (
     <nav className="breadcrumbs" aria-label="Breadcrumb">
@@ -2629,12 +2781,24 @@ function SeoTemplatePage({ config }: { config: SeoTemplateConfig }) {
     [config.contractTitle],
   );
   const relatedTemplates = useMemo(() => getRelatedTemplates(config), [config]);
+  const structuredData = useMemo(() => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+
+    return createTemplateStructuredData(
+      config,
+      relatedTemplates,
+      window.location.origin,
+    );
+  }, [config, relatedTemplates]);
 
   usePageMetadata({
     canonicalPath: config.path,
     title: config.title,
     description: config.metaDescription,
   });
+  useJsonLd(structuredData);
 
   function updateValue(key: string, value: string) {
     setValues((current) => ({ ...current, [key]: value }));
