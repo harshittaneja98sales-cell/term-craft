@@ -195,7 +195,7 @@ function renderStaticContent(page) {
           <nav class="breadcrumbs" aria-label="Breadcrumb">
             <a href="/">Home</a>
             <span>→</span>
-            <a href="/templates">Templates</a>
+            <a href="/templates">Template Hub</a>
             <span>→</span>
             <span>${escapeHtml(page.h1.replace(" Template", ""))}</span>
           </nav>
@@ -268,7 +268,7 @@ function renderPublicHeaderStatic() {
       </a>
       <nav class="public-nav" aria-label="Primary navigation">
         <a href="/">Home</a>
-        <a href="/templates">Templates</a>
+        <a href="/templates">Template Hub</a>
         <a href="/builder">Contract Studio</a>
         <a href="/privacy">Privacy</a>
         <a class="button primary" href="/builder" style="margin-left: 6px;">New Contract</a>
@@ -359,13 +359,103 @@ function renderHomeStaticContent() {
   `;
 }
 
+const directoryHubCategories = [
+  {
+    label: "Marketing & Agencies",
+    description: "Retainers, PPC, SEO, social, affiliate, and lead generation agreements.",
+    pattern: /lead|seo|marketing|social|ppc|affiliate|copywriting/i,
+  },
+  {
+    label: "Creative & Media",
+    description: "UGC, video, design, photography, creator, and production contracts.",
+    pattern: /ugc|creator|video|graphic|photography|copywriting/i,
+  },
+  {
+    label: "Web, SaaS & Software",
+    description: "SaaS SLAs, software SOWs, Shopify, Webflow, and web development projects.",
+    pattern: /saas|software|shopify|webflow|web-development|ecommerce/i,
+  },
+  {
+    label: "Contractors & Services",
+    description: "Independent contractor, subcontractor, virtual assistant, and service agreements.",
+    pattern: /contractor|subcontractor|assistant|services|consultant/i,
+  },
+  {
+    label: "Property & Construction",
+    description: "Commercial lease, lien waiver, HVAC, construction, and trade documents.",
+    pattern: /lease|lien|construction|hvac/i,
+  },
+  {
+    label: "NDA & Advisory",
+    description: "Mutual NDA, one-way NDA, advisory, referral, and sensitive business terms.",
+    pattern: /nda|advisory|referral|confidential|affiliate/i,
+  },
+];
+
+function categoryPageCount(category) {
+  return pages.filter((page) =>
+    category.pattern.test(`${page.path} ${page.title}`),
+  ).length;
+}
+
+function getHighIntentPages() {
+  const priorityPaths = [
+    "/templates/b2b-lead-generation-retainer-agreement",
+    "/templates/ugc-creator-agreement",
+    "/templates/social-media-management-contract",
+    "/templates/ppc-management-agreement",
+    "/templates/saas-service-level-agreement",
+    "/templates/shopify-store-setup-agreement",
+  ];
+
+  return priorityPaths
+    .map((pagePath) => pages.find((page) => page.path === pagePath))
+    .filter(Boolean);
+}
+
 function renderTemplatesDirectoryStaticContent() {
   return `
     <main class="templates-directory">
-      <section class="directory-header">
-        <div class="template-kicker">Template directory</div>
-        <h1>Free B2B Contract Templates with Instant PDF Download</h1>
-        <p>Choose a legal template, fill in the core terms, preview the agreement, and download a clean PDF without any watermark.</p>
+      <section class="directory-hub-hero">
+        <div class="directory-header">
+          <div class="template-kicker">Central template hub</div>
+          <h1>Free B2B Contract Template Directory Hub</h1>
+          <p>Browse every Term Craft template from one SEO hub. Each page includes focused dynamic fields, instant unwatermarked PDF generation, internal links, and structured data.</p>
+        </div>
+        <div class="directory-hub-panel">
+          <div class="directory-search">
+            <span aria-hidden="true"></span>
+            <input type="text" placeholder="Search by use case, e.g. UGC, Shopify, PPC, NDA..." />
+          </div>
+          <div class="directory-stats" aria-label="Template directory stats">
+            <div><strong>${pages.length}</strong><span>Templates</span></div>
+            <div><strong>${directoryHubCategories.length}</strong><span>Categories</span></div>
+            <div><strong>PDF</strong><span>No watermark</span></div>
+          </div>
+        </div>
+      </section>
+      <section class="directory-category-grid" aria-label="Template categories">
+        <a href="/templates"><strong>All Templates</strong><span>${pages.length} documents across the full library.</span></a>
+        ${directoryHubCategories
+          .map((category) => `<a href="/templates"><strong>${escapeHtml(category.label)}</strong><span>${categoryPageCount(category)} templates. ${escapeHtml(category.description)}</span></a>`)
+          .join("")}
+      </section>
+      <section class="directory-featured" aria-labelledby="high-intent-title">
+        <div class="home-section-header">
+          <div>
+            <h2 id="high-intent-title">High-Intent Template Pages</h2>
+            <p>Start with the templates most likely to match commercial search intent and bottom-funnel contract needs.</p>
+          </div>
+        </div>
+        <div class="template-link-grid">
+          ${getHighIntentPages().map((page) => renderTemplateCard(page)).join("")}
+        </div>
+      </section>
+      <section class="directory-results-header">
+        <div>
+          <h2>All Contract Templates</h2>
+          <p>Showing ${pages.length} of ${pages.length} templates.</p>
+        </div>
       </section>
       <section class="template-link-grid directory-grid" aria-label="Contract templates">
         ${pages.map((page) => renderTemplateCard(page)).join("")}
@@ -429,34 +519,57 @@ function buildGenericStructuredData(page) {
   const pageUrl = absoluteUrl(page.path);
   const organizationId = `${schemaBaseUrl}/#organization`;
   const websiteId = `${schemaBaseUrl}/#website`;
+  const pageType = page.path === "/templates" ? "CollectionPage" : "WebPage";
+  const templateList =
+    page.path === "/templates"
+      ? {
+          "@type": "ItemList",
+          "@id": `${pageUrl}#template-list`,
+          name: "Term Craft Contract Templates",
+          numberOfItems: pages.length,
+          itemListElement: pages.map((templatePage, index) => ({
+            "@type": "ListItem",
+            position: index + 1,
+            name: templatePage.h1.replace(" Template", ""),
+            url: absoluteUrl(templatePage.path),
+          })),
+        }
+      : null;
+
+  const graph = [
+    {
+      "@type": "Organization",
+      "@id": organizationId,
+      name: "Term Craft",
+      url: schemaBaseUrl,
+    },
+    {
+      "@type": "WebSite",
+      "@id": websiteId,
+      name: "Term Craft",
+      url: schemaBaseUrl,
+      publisher: { "@id": organizationId },
+    },
+    {
+      "@type": pageType,
+      "@id": `${pageUrl}#webpage`,
+      url: pageUrl,
+      name: page.h1,
+      headline: page.h1,
+      description: page.description,
+      isPartOf: { "@id": websiteId },
+      publisher: { "@id": organizationId },
+      ...(templateList ? { mainEntity: { "@id": templateList["@id"] } } : {}),
+    },
+  ];
+
+  if (templateList) {
+    graph.push(templateList);
+  }
 
   return {
     "@context": "https://schema.org",
-    "@graph": [
-      {
-        "@type": "Organization",
-        "@id": organizationId,
-        name: "Term Craft",
-        url: schemaBaseUrl,
-      },
-      {
-        "@type": "WebSite",
-        "@id": websiteId,
-        name: "Term Craft",
-        url: schemaBaseUrl,
-        publisher: { "@id": organizationId },
-      },
-      {
-        "@type": "WebPage",
-        "@id": `${pageUrl}#webpage`,
-        url: pageUrl,
-        name: page.h1,
-        headline: page.h1,
-        description: page.description,
-        isPartOf: { "@id": websiteId },
-        publisher: { "@id": organizationId },
-      },
-    ],
+    "@graph": graph,
   };
 }
 
@@ -500,7 +613,7 @@ function buildTemplateStructuredData(page) {
           {
             "@type": "ListItem",
             position: 2,
-            name: "Templates",
+            name: "Template Hub",
             item: absoluteUrl("/templates"),
           },
           {
@@ -618,10 +731,10 @@ const homePage = {
 
 const templatesDirectoryPage = {
   path: "/templates",
-  title: "Free Contract Template Directory | Term Craft",
+  title: "Contract Template Directory Hub | Term Craft",
   description:
-    "Browse free contract templates for lead generation retainers, SEO agency MSAs, subcontractor agreements, e-commerce web development contracts, and marketing agency NDAs.",
-  h1: "Free contract templates with instant PDF download.",
+    "Browse the central Term Craft template hub with free B2B contract templates, dynamic form fields, instant PDFs, internal links, and schema-ready SEO pages.",
+  h1: "Free B2B Contract Template Directory Hub",
 };
 
 const privacyPage = {

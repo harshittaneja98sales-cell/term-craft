@@ -2264,7 +2264,7 @@ function createTemplateStructuredData(
           {
             "@type": "ListItem",
             position: 2,
-            name: "Templates",
+            name: "Template Hub",
             item: absoluteUrl(siteUrl, "/templates"),
           },
           {
@@ -2345,12 +2345,63 @@ function createTemplateStructuredData(
   };
 }
 
+function createDirectoryStructuredData(origin: string) {
+  const siteUrl = origin.replace(/\/$/, "");
+  const pageUrl = absoluteUrl(siteUrl, "/templates");
+  const organizationId = `${siteUrl}/#organization`;
+  const websiteId = `${siteUrl}/#website`;
+  const itemListId = `${pageUrl}#template-list`;
+
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": organizationId,
+        name: "Term Craft",
+        url: siteUrl,
+      },
+      {
+        "@type": "WebSite",
+        "@id": websiteId,
+        name: "Term Craft",
+        url: siteUrl,
+        publisher: { "@id": organizationId },
+      },
+      {
+        "@type": "CollectionPage",
+        "@id": `${pageUrl}#webpage`,
+        url: pageUrl,
+        name: "Free B2B Contract Template Directory Hub",
+        headline: "Free B2B Contract Template Directory Hub",
+        description:
+          "Browse free B2B contract templates with dynamic form fields, instant PDFs, internal links, and structured data.",
+        isPartOf: { "@id": websiteId },
+        publisher: { "@id": organizationId },
+        mainEntity: { "@id": itemListId },
+      },
+      {
+        "@type": "ItemList",
+        "@id": itemListId,
+        name: "Term Craft Contract Templates",
+        numberOfItems: seoTemplateList.length,
+        itemListElement: seoTemplateList.map((template, index) => ({
+          "@type": "ListItem",
+          position: index + 1,
+          name: template.h1.replace(" Template", ""),
+          url: absoluteUrl(siteUrl, template.path),
+        })),
+      },
+    ],
+  };
+}
+
 function TemplateBreadcrumbs({ config }: { config: SeoTemplateConfig }) {
   return (
     <nav className="breadcrumbs" aria-label="Breadcrumb">
       <a href="/">Home</a>
       <ArrowRight size={13} />
-      <a href="/templates">Templates</a>
+      <a href="/templates">Template Hub</a>
       <ArrowRight size={13} />
       <span>{config.h1.replace(" Template", "")}</span>
     </nav>
@@ -2374,7 +2425,7 @@ function PublicHeader() {
 
       <nav className="public-nav" aria-label="Primary navigation">
         <a className={currentPath === "/" ? "active" : ""} href="/">Home</a>
-        <a className={currentPath.startsWith("/templates") ? "active" : ""} href="/templates">Templates</a>
+        <a className={currentPath.startsWith("/templates") ? "active" : ""} href="/templates">Template Hub</a>
         <a className={currentPath === "/builder" ? "active" : ""} href="/builder">Contract Studio</a>
         <a className={currentPath === "/privacy" ? "active" : ""} href="/privacy">Privacy</a>
         <a className="button primary" href="/builder">
@@ -2542,48 +2593,146 @@ function HomePage() {
 }
 
 function TemplatesDirectoryPage() {
+  const [activeCategory, setActiveCategory] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
+  const structuredData = useMemo(() => {
+    if (typeof window === "undefined") {
+      return null;
+    }
+
+    return createDirectoryStructuredData(window.location.origin);
+  }, []);
 
   usePageMetadata({
     canonicalPath: "/templates",
-    title: "Free B2B Contract Template Directory | Term Craft",
+    title: "Contract Template Directory Hub | Term Craft",
     description:
-      "Browse free contract templates for lead generation retainers, SEO agency MSAs, subcontractor agreements, e-commerce web development contracts, and marketing agency NDAs.",
+      "Browse the central Term Craft template hub with free B2B contract templates, dynamic form fields, instant PDFs, internal links, and schema-ready SEO pages.",
   });
+  useJsonLd(structuredData);
 
   const filteredTemplates = seoTemplateList.filter((t) => {
-    if (!searchTerm.trim()) return true;
     const q = searchTerm.toLowerCase();
-    return (
+    const matchesSearch =
+      !searchTerm.trim() ||
       t.h1.toLowerCase().includes(q) ||
       t.intro.toLowerCase().includes(q) ||
-      t.title.toLowerCase().includes(q)
+      t.title.toLowerCase().includes(q) ||
+      getTemplateTags(t).some((tag) => tag.toLowerCase().includes(q));
+    const selectedCategory = templateHubCategories.find(
+      (category) => category.key === activeCategory,
     );
+    const matchesCategory =
+      activeCategory === "all" || !selectedCategory || selectedCategory.match(t);
+
+    return matchesSearch && matchesCategory;
   });
+  const featuredTemplates = getHighIntentTemplates();
 
   return (
     <div className="public-page">
       <PublicHeader />
 
       <main className="templates-directory">
-        <section className="directory-header">
-          <div className="template-kicker">Template directory</div>
-          <h1>Free B2B Contract Templates with Instant PDF Download</h1>
-          <p>
-            Choose a legal template, fill in the core terms, preview the agreement,
-            and download a clean PDF without any watermark.
-          </p>
-
-          <div style={{ marginTop: '20px', maxWidth: '480px', position: 'relative' }}>
-            <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)' }} />
-            <input
-              type="text"
-              placeholder="Search templates (e.g. Lead Gen, SEO, Web Dev, Subcontractor)..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{ paddingLeft: '40px', minHeight: '44px', borderRadius: '10px' }}
-            />
+        <section className="directory-hub-hero">
+          <div className="directory-header">
+            <div className="template-kicker">Central template hub</div>
+            <h1>Free B2B Contract Template Directory Hub</h1>
+            <p>
+              Browse every Term Craft template from one SEO hub. Each page
+              includes focused dynamic fields, instant unwatermarked PDF
+              generation, internal links, and structured data.
+            </p>
           </div>
+
+          <div className="directory-hub-panel">
+            <div className="directory-search">
+              <Search size={18} />
+              <input
+                type="text"
+                placeholder="Search by use case, e.g. UGC, Shopify, PPC, NDA..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <div className="directory-stats" aria-label="Template directory stats">
+              <div>
+                <strong>{seoTemplateList.length}</strong>
+                <span>Templates</span>
+              </div>
+              <div>
+                <strong>{templateHubCategories.length}</strong>
+                <span>Categories</span>
+              </div>
+              <div>
+                <strong>PDF</strong>
+                <span>No watermark</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="directory-category-grid" aria-label="Template categories">
+          <button
+            className={activeCategory === "all" ? "active" : ""}
+            type="button"
+            onClick={() => setActiveCategory("all")}
+          >
+            <strong>All Templates</strong>
+            <span>{seoTemplateList.length} documents across the full library.</span>
+          </button>
+          {templateHubCategories.map((category) => (
+            <button
+              className={activeCategory === category.key ? "active" : ""}
+              key={category.key}
+              type="button"
+              onClick={() => setActiveCategory(category.key)}
+            >
+              <strong>{category.label}</strong>
+              <span>
+                {getCategoryTemplates(category).length} templates.{" "}
+                {category.description}
+              </span>
+            </button>
+          ))}
+        </section>
+
+        <section className="directory-featured" aria-labelledby="high-intent-title">
+          <div className="home-section-header">
+            <div>
+              <h2 id="high-intent-title">High-Intent Template Pages</h2>
+              <p>
+                Start with the templates most likely to match commercial search
+                intent and bottom-funnel contract needs.
+              </p>
+            </div>
+          </div>
+          <div className="template-link-grid">
+            {featuredTemplates.map((template) => (
+              <TemplateLinkCard key={template.path} template={template} />
+            ))}
+          </div>
+        </section>
+
+        <section className="directory-results-header" aria-live="polite">
+          <div>
+            <h2>All Contract Templates</h2>
+            <p>
+              Showing {filteredTemplates.length} of {seoTemplateList.length} templates.
+            </p>
+          </div>
+          {(searchTerm || activeCategory !== "all") ? (
+            <button
+              className="button secondary"
+              type="button"
+              onClick={() => {
+                setActiveCategory("all");
+                setSearchTerm("");
+              }}
+            >
+              Clear filters
+            </button>
+          ) : null}
         </section>
 
         <section className="template-link-grid directory-grid" aria-label="Contract templates">
@@ -2594,8 +2743,15 @@ function TemplatesDirectoryPage() {
           ) : (
             <div className="empty-state" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '32px' }}>
               <p>No contract templates match "{searchTerm}".</p>
-              <button className="button secondary" onClick={() => setSearchTerm("")} style={{ marginTop: '12px' }}>
-                Clear Search Filter
+              <button
+                className="button secondary"
+                onClick={() => {
+                  setActiveCategory("all");
+                  setSearchTerm("");
+                }}
+                style={{ marginTop: '12px' }}
+              >
+                Clear filters
               </button>
             </div>
           )}
@@ -2637,6 +2793,87 @@ function TemplateLinkCard({ template }: { template: SeoTemplateConfig }) {
       </a>
     </article>
   );
+}
+
+type TemplateHubCategory = {
+  description: string;
+  key: string;
+  label: string;
+  match: (template: SeoTemplateConfig) => boolean;
+};
+
+const templateHubCategories: TemplateHubCategory[] = [
+  {
+    key: "marketing",
+    label: "Marketing & Agencies",
+    description: "Retainers, PPC, SEO, social, affiliate, and lead generation agreements.",
+    match: (template) =>
+      /lead|seo|marketing|social|ppc|affiliate|copywriting/i.test(
+        `${template.path} ${template.title}`,
+      ),
+  },
+  {
+    key: "creative",
+    label: "Creative & Media",
+    description: "UGC, video, design, photography, creator, and production contracts.",
+    match: (template) =>
+      /ugc|creator|video|graphic|photography|copywriting/i.test(
+        `${template.path} ${template.title}`,
+      ),
+  },
+  {
+    key: "web-saas",
+    label: "Web, SaaS & Software",
+    description: "SaaS SLAs, software SOWs, Shopify, Webflow, and web development projects.",
+    match: (template) =>
+      /saas|software|shopify|webflow|web-development|ecommerce/i.test(
+        `${template.path} ${template.title}`,
+      ),
+  },
+  {
+    key: "contractors",
+    label: "Contractors & Services",
+    description: "Independent contractor, subcontractor, virtual assistant, and service agreements.",
+    match: (template) =>
+      /contractor|subcontractor|assistant|services|consultant/i.test(
+        `${template.path} ${template.title}`,
+      ),
+  },
+  {
+    key: "property",
+    label: "Property & Construction",
+    description: "Commercial lease, lien waiver, HVAC, construction, and trade documents.",
+    match: (template) =>
+      /lease|lien|construction|hvac/i.test(`${template.path} ${template.title}`),
+  },
+  {
+    key: "confidentiality",
+    label: "NDA & Advisory",
+    description: "Mutual NDA, one-way NDA, advisory, referral, and sensitive business terms.",
+    match: (template) =>
+      /nda|advisory|referral|confidential|affiliate/i.test(
+        `${template.path} ${template.title}`,
+      ),
+  },
+];
+
+function getCategoryTemplates(category: TemplateHubCategory) {
+  return seoTemplateList.filter((template) => category.match(template));
+}
+
+function getHighIntentTemplates() {
+  const priorityPaths = [
+    "/templates/b2b-lead-generation-retainer-agreement",
+    "/templates/ugc-creator-agreement",
+    "/templates/social-media-management-contract",
+    "/templates/ppc-management-agreement",
+    "/templates/saas-service-level-agreement",
+    "/templates/shopify-store-setup-agreement",
+  ];
+
+  return priorityPaths
+    .map((path) => seoTemplateConfigs[path])
+    .filter(Boolean);
 }
 
 function PrivacyPage() {
@@ -3844,7 +4081,7 @@ function ContractBuilderApp() {
 
         <nav className="public-nav" style={{ margin: '0 12px 0 auto' }}>
           <a href="/">Home</a>
-          <a href="/templates">Templates</a>
+          <a href="/templates">Template Hub</a>
           <a href="/admin/leads">Admin</a>
         </nav>
 

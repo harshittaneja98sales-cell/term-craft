@@ -1426,18 +1426,183 @@ button:focus-visible {
 }
 
 .templates-directory {
-  padding: 56px 24px 72px;
+  display: grid;
+  gap: 28px;
+  padding: 40px 24px 72px;
+}
+
+.directory-hub-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 420px;
+  gap: 28px;
+  align-items: end;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #ffffff;
+  padding: 28px;
+  box-shadow: var(--shadow-sm);
 }
 
 .directory-header {
-  max-width: 840px;
-  margin-bottom: 28px;
+  max-width: 820px;
 }
 
 .directory-header h1 {
   margin-top: 14px;
   font-size: 46px;
   font-weight: 800;
+}
+
+.directory-hub-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.directory-search {
+  position: relative;
+}
+
+.directory-search svg,
+.directory-search > span {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  transform: translateY(-50%);
+  color: var(--muted);
+}
+
+.directory-search > span {
+  border: 2px solid var(--muted);
+}
+
+.directory-search > span::after {
+  content: "";
+  position: absolute;
+  right: -5px;
+  bottom: -4px;
+  width: 7px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--muted);
+  transform: rotate(45deg);
+}
+
+.directory-search input {
+  min-height: 48px;
+  border-radius: 10px;
+  padding-left: 42px;
+}
+
+.directory-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.directory-stats div {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-alt);
+  padding: 12px;
+}
+
+.directory-stats strong,
+.directory-stats span {
+  display: block;
+}
+
+.directory-stats strong {
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.directory-stats span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  margin-top: 5px;
+}
+
+.directory-category-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.directory-category-grid button,
+.directory-category-grid a {
+  display: grid;
+  gap: 6px;
+  min-height: 112px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #ffffff;
+  color: inherit;
+  padding: 16px;
+  text-align: left;
+  text-decoration: none;
+  box-shadow: var(--shadow-sm);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.directory-category-grid button:hover,
+.directory-category-grid a:hover,
+.directory-category-grid button.active {
+  border-color: var(--teal);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.directory-category-grid button.active {
+  background: var(--green-soft);
+}
+
+.directory-category-grid strong {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.2;
+}
+
+.directory-category-grid span {
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.directory-featured {
+  display: grid;
+  gap: 4px;
+}
+
+.directory-results-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  border-top: 1px solid var(--line);
+  padding-top: 26px;
+}
+
+.directory-results-header h2 {
+  color: var(--ink);
+  font-size: 28px;
+  font-weight: 850;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.directory-results-header p {
+  color: var(--muted);
+  font-size: 14.5px;
+  line-height: 1.55;
+  margin: 6px 0 0;
 }
 
 .directory-grid {
@@ -2048,6 +2213,14 @@ button:focus-visible {
     grid-template-columns: minmax(0, 1fr) 380px;
   }
 
+  .directory-hub-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .directory-category-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .hero-copy h1 {
     font-size: 48px;
   }
@@ -2104,13 +2277,15 @@ button:focus-visible {
   .home-section-header,
   .admin-header,
   .home-band,
+  .directory-results-header,
   .related-template-header {
     align-items: stretch;
     flex-direction: column;
   }
 
   .template-link-grid,
-  .directory-grid {
+  .directory-grid,
+  .directory-category-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -2171,6 +2346,8 @@ button:focus-visible {
   .template-stat-grid,
   .template-link-grid,
   .directory-grid,
+  .directory-category-grid,
+  .directory-stats,
   .seo-card-grid,
   .public-footer-inner,
   .metric-grid,
