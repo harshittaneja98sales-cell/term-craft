@@ -141,6 +141,12 @@ button:focus-visible {
   min-width: 0;
 }
 
+.brand > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
 .brand-mark {
   display: grid;
   width: 42px;
@@ -160,16 +166,21 @@ button:focus-visible {
 }
 
 .brand strong {
+  display: block;
   font-size: 18px;
   font-weight: 800;
   line-height: 1.2;
   color: var(--ink);
+  white-space: nowrap;
 }
 
 .brand span {
+  display: block;
   color: var(--muted);
   font-size: 12px;
   font-weight: 500;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .topbar-actions,
