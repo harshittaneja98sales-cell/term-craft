@@ -153,12 +153,25 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
+function getRelatedPages(page) {
+  return pages.filter((candidate) => candidate.path !== page.path).slice(0, 4);
+}
+
 function renderStaticContent(page) {
+  const relatedPages = getRelatedPages(page);
+
   return `
     <main class="template-page-shell">
       <section class="template-workbench" aria-labelledby="template-title">
         <div class="template-form-panel">
           <div class="template-kicker">Free PDF template</div>
+          <nav class="breadcrumbs" aria-label="Breadcrumb">
+            <a href="/">Home</a>
+            <span>→</span>
+            <a href="/templates">Templates</a>
+            <span>→</span>
+            <span>${escapeHtml(page.h1.replace(" Template", ""))}</span>
+          </nav>
           <h1 id="template-title">${escapeHtml(page.h1)}</h1>
           <p>${escapeHtml(page.intro)}</p>
           <div class="template-fields">
@@ -196,6 +209,18 @@ function renderStaticContent(page) {
               .map(([question, answer]) => `<article><h3>${escapeHtml(question)}</h3><p>${escapeHtml(answer)}</p></article>`)
               .join("")}
           </div>
+          <section class="related-templates" aria-labelledby="related-templates-title">
+            <div class="related-template-header">
+              <div>
+                <h2 id="related-templates-title">Related Contract Templates</h2>
+                <p>Keep building the same agreement stack with adjacent agency, marketing, and web service documents.</p>
+              </div>
+              <a class="text-link" href="/templates">View all templates →</a>
+            </div>
+            <div class="template-link-grid related-template-grid">
+              ${relatedPages.map((relatedPage) => renderTemplateCard(relatedPage)).join("")}
+            </div>
+          </section>
         </div>
       </section>
     </main>
@@ -222,6 +247,32 @@ function renderPublicHeaderStatic() {
         <a class="button primary" href="/builder" style="margin-left: 6px;">New Contract</a>
       </nav>
     </header>
+  `;
+}
+
+function renderPublicFooterStatic() {
+  return `
+    <footer class="public-footer no-print">
+      <div class="public-footer-inner">
+        <div>
+          <a class="footer-brand" href="/">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="m9 15 2 2 4-4"/></svg>
+            <span>Term Craft</span>
+          </a>
+          <p>Free B2B contract templates with instant PDF downloads and signing workflow capture.</p>
+        </div>
+        <nav aria-label="Template footer links">
+          <strong>Contract templates</strong>
+          ${pages.map((page) => `<a href="${page.path}">${escapeHtml(page.h1.replace(" Template", ""))}</a>`).join("")}
+        </nav>
+        <nav aria-label="Product footer links">
+          <strong>Term Craft</strong>
+          <a href="/templates">Template directory</a>
+          <a href="/builder">Contract Studio</a>
+          <a href="/privacy">Privacy Policy</a>
+        </nav>
+      </div>
+    </footer>
   `;
 }
 
@@ -359,7 +410,7 @@ function renderHtml(page, staticContent = renderStaticContent(page)) {
     )
     .replace(
       '<div id="root"></div>',
-      `<div id="root">${renderPublicHeaderStatic()}${staticContent}</div>`,
+      `<div id="root">${renderPublicHeaderStatic()}${staticContent}${renderPublicFooterStatic()}</div>`,
     );
 }
 

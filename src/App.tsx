@@ -1983,6 +1983,24 @@ function getTemplateTags(config: SeoTemplateConfig) {
     .map((field) => field.label);
 }
 
+function getRelatedTemplates(config: SeoTemplateConfig) {
+  return seoTemplateList
+    .filter((template) => template.path !== config.path)
+    .slice(0, 4);
+}
+
+function TemplateBreadcrumbs({ config }: { config: SeoTemplateConfig }) {
+  return (
+    <nav className="breadcrumbs" aria-label="Breadcrumb">
+      <a href="/">Home</a>
+      <ArrowRight size={13} />
+      <a href="/templates">Templates</a>
+      <ArrowRight size={13} />
+      <span>{config.h1.replace(" Template", "")}</span>
+    </nav>
+  );
+}
+
 function PublicHeader() {
   const currentPath = typeof window !== "undefined" ? window.location.pathname : "/";
 
@@ -2009,6 +2027,41 @@ function PublicHeader() {
         </a>
       </nav>
     </header>
+  );
+}
+
+function PublicFooter() {
+  return (
+    <footer className="public-footer no-print">
+      <div className="public-footer-inner">
+        <div>
+          <a className="footer-brand" href="/">
+            <FileCheck2 size={18} />
+            <span>Term Craft</span>
+          </a>
+          <p>
+            Free B2B contract templates with instant PDF downloads and signing
+            workflow capture.
+          </p>
+        </div>
+
+        <nav aria-label="Template footer links">
+          <strong>Contract templates</strong>
+          {seoTemplateList.map((template) => (
+            <a key={template.path} href={template.path}>
+              {template.h1.replace(" Template", "")}
+            </a>
+          ))}
+        </nav>
+
+        <nav aria-label="Product footer links">
+          <strong>Term Craft</strong>
+          <a href="/templates">Template directory</a>
+          <a href="/builder">Contract Studio</a>
+          <a href="/privacy">Privacy Policy</a>
+        </nav>
+      </div>
+    </footer>
   );
 }
 
@@ -2127,6 +2180,7 @@ function HomePage() {
           </a>
         </section>
       </main>
+      <PublicFooter />
     </div>
   );
 }
@@ -2201,6 +2255,7 @@ function TemplatesDirectoryPage() {
           </p>
         </section>
       </main>
+      <PublicFooter />
     </div>
   );
 }
@@ -2284,6 +2339,7 @@ function PrivacyPage() {
           </p>
         </section>
       </main>
+      <PublicFooter />
     </div>
   );
 }
@@ -2572,6 +2628,7 @@ function SeoTemplatePage({ config }: { config: SeoTemplateConfig }) {
     ],
     [config.contractTitle],
   );
+  const relatedTemplates = useMemo(() => getRelatedTemplates(config), [config]);
 
   usePageMetadata({
     canonicalPath: config.path,
@@ -2610,6 +2667,7 @@ function SeoTemplatePage({ config }: { config: SeoTemplateConfig }) {
         <section className="template-workbench" aria-labelledby="template-title">
           <div className="template-form-panel">
             <div className="template-kicker">Free PDF template</div>
+            <TemplateBreadcrumbs config={config} />
             <h1 id="template-title">{config.h1}</h1>
             <p>{config.intro}</p>
 
@@ -2708,9 +2766,32 @@ function SeoTemplatePage({ config }: { config: SeoTemplateConfig }) {
                 </article>
               ))}
             </div>
+
+            <section className="related-templates" aria-labelledby="related-templates-title">
+              <div className="related-template-header">
+                <div>
+                  <h2 id="related-templates-title">Related Contract Templates</h2>
+                  <p>
+                    Keep building the same agreement stack with adjacent agency,
+                    marketing, and web service documents.
+                  </p>
+                </div>
+                <a className="text-link" href="/templates">
+                  View all templates
+                  <ArrowRight size={16} />
+                </a>
+              </div>
+
+              <div className="template-link-grid related-template-grid">
+                {relatedTemplates.map((template) => (
+                  <TemplateLinkCard key={template.path} template={template} />
+                ))}
+              </div>
+            </section>
           </div>
         </section>
       </main>
+      <PublicFooter />
 
       <PostDownloadModal
         isOpen={postDownloadOpen}
