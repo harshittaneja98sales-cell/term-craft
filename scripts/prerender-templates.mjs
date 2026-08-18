@@ -270,6 +270,7 @@ function renderPublicHeaderStatic() {
         <a href="/">Home</a>
         <a href="/templates">Template Hub</a>
         <a href="/builder">Contract Studio</a>
+        <a href="/dashboard">Vault</a>
         <a href="/privacy">Privacy</a>
         <a class="button primary" href="/builder" style="margin-left: 6px;">New Contract</a>
       </nav>
@@ -296,6 +297,7 @@ function renderPublicFooterStatic() {
           <strong>Term Craft</strong>
           <a href="/templates">Template directory</a>
           <a href="/builder">Contract Studio</a>
+          <a href="/dashboard">Document Vault</a>
           <a href="/privacy">Privacy Policy</a>
         </nav>
       </div>
@@ -477,6 +479,10 @@ function renderPrivacyStaticContent() {
       <section>
         <h2>Information We Collect</h2>
         <p>If you submit the post-download form, we collect your email address, the template you downloaded, the page path, timestamp, referrer, and UTM parameters when present. We also collect first-party analytics events such as page views and template PDF downloads. We do not submit the filled contract terms to the lead capture API.</p>
+      </section>
+      <section>
+        <h2>Account Vault</h2>
+        <p>If you create an account and save a document to your vault, we store the contract draft, selected template, signer details, and audit events needed to reload that document for your account.</p>
       </section>
       <section>
         <h2>How We Use Information</h2>
@@ -777,6 +783,8 @@ fs.writeFileSync(path.join(distDir, "sitemap.xml"), sitemap);
 const robots = `User-agent: *
 Allow: /
 Disallow: /admin
+Disallow: /dashboard
+Disallow: /login
 
 Sitemap: ${sitemapBaseUrl}/sitemap.xml
 `;

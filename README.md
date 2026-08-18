@@ -12,19 +12,22 @@ This repo includes a `render.yaml` Blueprint for a Node web service:
 - Start command: `npm start`
 - Production URL: `https://usetermcraft.com`
 
-The first deploy uses Render's free web service plan so the site can go live without a billing step. Lead capture and first-party analytics can persist in Supabase when the Supabase environment variables are configured. Without Supabase, the app falls back to local JSON files, which are not durable on Render Free.
+The first deploy uses Render's free web service plan so the site can go live without a billing step. Lead capture, first-party analytics, accounts, and saved documents can persist in Supabase when the Supabase environment variables are configured. Without Supabase, the app falls back to local JSON files, which are not durable on Render Free.
 
-## Durable Leads and Analytics
+## Durable Leads, Analytics, and Document Vault
 
 1. Create a Supabase project.
 2. Open Supabase SQL Editor and run `supabase/schema.sql`.
 3. In Render, add these environment variables to the `term-craft` service:
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
+   - `SUPABASE_PUBLISHABLE_KEY`
    - `ADMIN_API_KEY`
 4. Redeploy the latest commit.
 
-Production admin routes require `ADMIN_API_KEY`. Never expose `SUPABASE_SERVICE_ROLE_KEY` in browser code. It is used only by the Express API.
+Production admin routes require `ADMIN_API_KEY`. `SUPABASE_PUBLISHABLE_KEY` is used for account signup/login. Never expose `SUPABASE_SERVICE_ROLE_KEY` in browser code. It is used only by the Express API.
+
+For account confirmation links, set the Supabase Auth site URL to `https://usetermcraft.com` and add `https://usetermcraft.com/dashboard` as an allowed redirect URL.
 
 ## Follow-up Email Delivery
 

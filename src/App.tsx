@@ -8,7 +8,10 @@ import {
   Download,
   FileCheck2,
   FileText,
+  FolderOpen,
+  KeyRound,
   History,
+  LogOut,
   Mail,
   PenLine,
   Printer,
@@ -17,6 +20,8 @@ import {
   ShieldCheck,
   Search,
   Target,
+  Trash2,
+  UserPlus,
   Users,
   UserCheck,
   Wand2,
@@ -159,6 +164,60 @@ type LeadCaptureResponse = {
   };
 };
 
+type AuthUser = {
+  id: string;
+  email: string;
+};
+
+type AuthSession = {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number;
+  tokenType: string;
+  user: AuthUser;
+};
+
+type AuthResponse = {
+  confirmationRequired?: boolean;
+  session?: AuthSession | null;
+  user?: AuthUser;
+};
+
+type DocumentStorageInfo = {
+  provider: string;
+  durable: boolean;
+};
+
+type VaultDocument = {
+  id: string;
+  userId: string;
+  title: string;
+  templateTitle: string;
+  templatePath: string;
+  status: string;
+  contract: ContractState;
+  sections: ContractSection[];
+  signers: Signer[];
+  clauses: Partial<Record<ClauseKey, boolean>>;
+  auditEvents: AuditEvent[];
+  templateValues: Record<string, string>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type SaveVaultDocumentPayload = {
+  title: string;
+  templateTitle: string;
+  templatePath: string;
+  status: string;
+  contract: ContractState;
+  sections: ContractSection[];
+  signers: Signer[];
+  clauses?: Partial<Record<ClauseKey, boolean>>;
+  auditEvents?: AuditEvent[];
+  templateValues?: Record<string, string>;
+};
+
 type B2BLeadGenerationForm = {
   clientName: string;
   providerName: string;
@@ -172,6 +231,7 @@ type B2BLeadGenerationForm = {
 
 const STORAGE_KEY = "termcraft.contract-draft.v1";
 const TEMPLATE_DOWNLOAD_LEADS_KEY = "termcraft.template-download-leads.v1";
+const AUTH_SESSION_KEY = "termcraft.auth-session.v1";
 const B2B_LEAD_GEN_PATH = "/templates/b2b-lead-generation-retainer-agreement";
 
 const templateDefaults: Record<
@@ -585,6 +645,229 @@ function sendAnalyticsEvent(
     keepalive: true,
     method: "POST",
   }).catch(() => undefined);
+}
+
+async function readApiError(response: Response, fallback: string) {
+  try {
+    const data = (await response.json()) as { error?: string };
+    return data.error || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function readStoredAuthSession(): AuthSession | null {
+  try {
+    const raw = localStorage.getItem(AUTH_SESSION_KEY);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as AuthSession;
+    if (!parsed.accessToken || !parsed.user?.id) {
+      return null;
+    }
+
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveStoredAuthSession(session: AuthSession) {
+  localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session));
+}
+
+function clearStoredAuthSession() {
+  localStorage.removeItem(AUTH_SESSION_KEY);
+}
+
+function createAuthHeaders(session: AuthSession) {
+  return {
+    Authorization: `Bearer ${session.accessToken}`,
+    "Content-Type": "application/json",
+  };
+}
+
+async function fetchAuthConfig() {
+  const response = await fetch("/api/auth/config");
+  if (!response.ok) {
+    return { enabled: false };
+  }
+
+  return response.json() as Promise<{ enabled: boolean }>;
+}
+
+async function requestEmailAuth(
+  mode: "login" | "signup",
+  email: string,
+  password: string,
+) {
+  const response = await fetch(`/api/auth/${mode}`, {
+    body: JSON.stringify({ email, password }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      await readApiError(
+        response,
+        mode === "login" ? "Could not sign in." : "Could not create account.",
+      ),
+    );
+  }
+
+  return response.json() as Promise<AuthResponse>;
+}
+
+async function refreshAuthSession(refreshToken: string) {
+  const response = await fetch("/api/auth/refresh", {
+    body: JSON.stringify({ refreshToken }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Could not refresh session."));
+  }
+
+  const data = (await response.json()) as AuthResponse;
+  if (!data.session) {
+    throw new Error("Could not refresh session.");
+  }
+
+  saveStoredAuthSession(data.session);
+  return data.session;
+}
+
+async function getUsableAuthSession() {
+  const session = readStoredAuthSession();
+  if (!session) {
+    return null;
+  }
+
+  const expiresSoon = session.expiresAt < Math.floor(Date.now() / 1000) + 90;
+  if (!expiresSoon) {
+    return session;
+  }
+
+  if (!session.refreshToken) {
+    clearStoredAuthSession();
+    return null;
+  }
+
+  try {
+    return await refreshAuthSession(session.refreshToken);
+  } catch {
+    clearStoredAuthSession();
+    return null;
+  }
+}
+
+async function fetchCurrentAuthUser(session: AuthSession) {
+  const response = await fetch("/api/auth/user", {
+    headers: createAuthHeaders(session),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Session expired."));
+  }
+
+  const data = (await response.json()) as { user: AuthUser };
+  return data.user;
+}
+
+async function logoutAuthSession(session: AuthSession | null) {
+  if (session) {
+    await fetch("/api/auth/logout", {
+      headers: createAuthHeaders(session),
+      method: "POST",
+    }).catch(() => undefined);
+  }
+
+  clearStoredAuthSession();
+}
+
+async function fetchVaultDocuments(session: AuthSession) {
+  const response = await fetch("/api/documents", {
+    headers: createAuthHeaders(session),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Could not load documents."));
+  }
+
+  return response.json() as Promise<{
+    documents: VaultDocument[];
+    storage: DocumentStorageInfo;
+  }>;
+}
+
+async function saveVaultDocument(
+  session: AuthSession,
+  payload: SaveVaultDocumentPayload,
+) {
+  const response = await fetch("/api/documents", {
+    body: JSON.stringify(payload),
+    headers: createAuthHeaders(session),
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Could not save document."));
+  }
+
+  return response.json() as Promise<{
+    document: VaultDocument;
+    storage: DocumentStorageInfo;
+  }>;
+}
+
+async function deleteVaultDocument(session: AuthSession, documentId: string) {
+  const response = await fetch(`/api/documents/${encodeURIComponent(documentId)}`, {
+    headers: createAuthHeaders(session),
+    method: "DELETE",
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Could not delete document."));
+  }
+}
+
+function getInternalNextPath() {
+  const params = new URLSearchParams(window.location.search);
+  const next = params.get("next") ?? "/dashboard";
+
+  return next.startsWith("/") && !next.startsWith("//") ? next : "/dashboard";
+}
+
+function getLoginUrl(nextPath = window.location.pathname) {
+  const next = nextPath.startsWith("/") && !nextPath.startsWith("//")
+    ? nextPath
+    : "/dashboard";
+  return `/login?next=${encodeURIComponent(next)}`;
+}
+
+function openDocumentInStudio(document: VaultDocument) {
+  const draft: StoredDraft = {
+    auditEvents: document.auditEvents?.length
+      ? document.auditEvents
+      : createInitialAudit(),
+    clauses: {
+      ...initialClauses,
+      ...(document.clauses ?? {}),
+    } as Record<ClauseKey, boolean>,
+    contract: document.contract,
+    signers: document.signers?.length ? document.signers : createDefaultSigners(),
+  };
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+  window.location.href = "/builder";
+}
+
+function createVaultDocumentTitle(contract: ContractState) {
+  return `${contract.contractTitle} - ${contract.customerName || "Client"}`;
 }
 
 function formatDate(value: string) {
@@ -2427,6 +2710,7 @@ function PublicHeader() {
         <a className={currentPath === "/" ? "active" : ""} href="/">Home</a>
         <a className={currentPath.startsWith("/templates") ? "active" : ""} href="/templates">Template Hub</a>
         <a className={currentPath === "/builder" ? "active" : ""} href="/builder">Contract Studio</a>
+        <a className={currentPath === "/dashboard" ? "active" : ""} href="/dashboard">Vault</a>
         <a className={currentPath === "/privacy" ? "active" : ""} href="/privacy">Privacy</a>
         <a className="button primary" href="/builder">
           <Wand2 size={16} />
@@ -2465,6 +2749,7 @@ function PublicFooter() {
           <strong>Term Craft</strong>
           <a href="/templates">Template directory</a>
           <a href="/builder">Contract Studio</a>
+          <a href="/dashboard">Document Vault</a>
           <a href="/privacy">Privacy Policy</a>
         </nav>
       </div>
@@ -2876,6 +3161,399 @@ function getHighIntentTemplates() {
     .filter(Boolean);
 }
 
+function AuthPage() {
+  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authEnabled, setAuthEnabled] = useState<boolean | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  usePageMetadata({
+    canonicalPath: "/login",
+    title: "Sign In | Term Craft",
+    description: "Sign in to Term Craft to save contracts in your document vault.",
+  });
+  useRobotsMeta("noindex,nofollow");
+
+  useEffect(() => {
+    void fetchAuthConfig()
+      .then((config) => setAuthEnabled(config.enabled))
+      .catch(() => setAuthEnabled(false));
+  }, []);
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+    setMessage("");
+    setIsSubmitting(true);
+
+    try {
+      const response = await requestEmailAuth(mode, email, password);
+
+      if (response.session) {
+        saveStoredAuthSession(response.session);
+        window.location.href = getInternalNextPath();
+        return;
+      }
+
+      if (response.confirmationRequired) {
+        setMessage("Check your email to confirm the account, then sign in.");
+        setMode("login");
+      } else {
+        setMessage("Account created. You can sign in now.");
+        setMode("login");
+      }
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Authentication failed.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="public-page">
+      <PublicHeader />
+      <main className="auth-page">
+        <section className="auth-panel">
+          <div className="auth-copy">
+            <div className="template-kicker">Account</div>
+            <h1>{mode === "login" ? "Sign in to your vault" : "Create your account"}</h1>
+            <p>
+              Save generated contracts, return to drafts, and download the same
+              document from your private Term Craft workspace.
+            </p>
+          </div>
+
+          <div className="auth-mode-tabs" role="tablist" aria-label="Auth mode">
+            <button
+              className={mode === "login" ? "active" : ""}
+              type="button"
+              onClick={() => setMode("login")}
+            >
+              Sign In
+            </button>
+            <button
+              className={mode === "signup" ? "active" : ""}
+              type="button"
+              onClick={() => setMode("signup")}
+            >
+              Create Account
+            </button>
+          </div>
+
+          {authEnabled === false ? (
+            <div className="admin-alert">
+              Accounts are not enabled yet. Add `SUPABASE_PUBLISHABLE_KEY` in
+              Render, then redeploy.
+            </div>
+          ) : null}
+
+          <form className="auth-form" onSubmit={handleSubmit}>
+            <Field label="Email">
+              <input
+                autoComplete="email"
+                inputMode="email"
+                placeholder="you@company.com"
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+            </Field>
+            <Field label="Password">
+              <input
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                minLength={8}
+                placeholder="At least 8 characters"
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </Field>
+            <button
+              className="button primary full-width"
+              disabled={isSubmitting || authEnabled === false}
+              type="submit"
+            >
+              {mode === "login" ? <KeyRound size={17} /> : <UserPlus size={17} />}
+              <span>
+                {isSubmitting
+                  ? "Working..."
+                  : mode === "login"
+                    ? "Sign In"
+                    : "Create Account"}
+              </span>
+            </button>
+          </form>
+
+          {message ? <div className="modal-status success">{message}</div> : null}
+          {error ? <div className="admin-alert">{error}</div> : null}
+        </section>
+      </main>
+      <PublicFooter />
+    </div>
+  );
+}
+
+function DashboardPage() {
+  const [session, setSession] = useState<AuthSession | null>(
+    () => readStoredAuthSession(),
+  );
+  const [documents, setDocuments] = useState<VaultDocument[]>([]);
+  const [storage, setStorage] = useState<DocumentStorageInfo | null>(null);
+  const [selectedId, setSelectedId] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const selectedDocument =
+    documents.find((document) => document.id === selectedId) ?? documents[0];
+
+  usePageMetadata({
+    canonicalPath: "/dashboard",
+    title: "Document Vault | Term Craft",
+    description: "Private Term Craft dashboard for saved contract drafts.",
+  });
+  useRobotsMeta("noindex,nofollow");
+
+  async function loadVault() {
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const activeSession = await getUsableAuthSession();
+      if (!activeSession) {
+        setSession(null);
+        setDocuments([]);
+        return;
+      }
+
+      const user = await fetchCurrentAuthUser(activeSession);
+      const nextSession = { ...activeSession, user };
+      saveStoredAuthSession(nextSession);
+      setSession(nextSession);
+
+      const data = await fetchVaultDocuments(nextSession);
+      setDocuments(data.documents);
+      setStorage(data.storage);
+      setSelectedId((current) => current || data.documents[0]?.id || "");
+    } catch (requestError) {
+      clearStoredAuthSession();
+      setSession(null);
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not load your vault.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function signOut() {
+    await logoutAuthSession(session);
+    setSession(null);
+    setDocuments([]);
+    setSelectedId("");
+  }
+
+  async function removeDocument(documentId: string) {
+    if (!session || !window.confirm("Delete this saved document?")) {
+      return;
+    }
+
+    try {
+      await deleteVaultDocument(session, documentId);
+      setDocuments((current) => current.filter((document) => document.id !== documentId));
+      setSelectedId("");
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not delete document.",
+      );
+    }
+  }
+
+  useEffect(() => {
+    void loadVault();
+  }, []);
+
+  if (!session && !isLoading) {
+    return (
+      <div className="public-page">
+        <PublicHeader />
+        <main className="auth-page">
+          <section className="auth-panel">
+            <div className="auth-copy">
+              <div className="template-kicker">Document Vault</div>
+              <h1>Sign in to save contracts</h1>
+              <p>
+                Your vault stores generated agreements under your account so
+                you can return to them after downloading a PDF.
+              </p>
+            </div>
+            {error ? <div className="admin-alert">{error}</div> : null}
+            <a className="button primary full-width" href={getLoginUrl("/dashboard")}>
+              <KeyRound size={17} />
+              <span>Sign In or Create Account</span>
+            </a>
+          </section>
+        </main>
+        <PublicFooter />
+      </div>
+    );
+  }
+
+  return (
+    <div className="public-page">
+      <PublicHeader />
+      <main className="vault-page">
+        <section className="vault-header">
+          <div>
+            <div className="template-kicker">Document Vault</div>
+            <h1>Your saved contracts</h1>
+            <p>
+              Private workspace for generated drafts, signing prep, and PDF
+              exports.
+            </p>
+          </div>
+          <div className="admin-actions">
+            <a className="button secondary" href="/templates">
+              <FileText size={17} />
+              <span>Templates</span>
+            </a>
+            <button className="button secondary" type="button" onClick={loadVault}>
+              <RotateCcw size={17} />
+              <span>Refresh</span>
+            </button>
+            <button className="button ghost" type="button" onClick={signOut}>
+              <LogOut size={17} />
+              <span>Sign Out</span>
+            </button>
+          </div>
+        </section>
+
+        <section className="admin-metrics">
+          <Metric label="Documents" value={`${documents.length}`} />
+          <Metric
+            label="Latest"
+            value={documents[0]?.updatedAt ? formatTimestamp(documents[0].updatedAt) : "None"}
+          />
+          <Metric label="Account" value={session?.user.email ?? "Signed in"} />
+          <Metric
+            label="Storage"
+            value={storage?.durable ? "Supabase" : storage ? "Local JSON" : "Checking"}
+          />
+        </section>
+
+        {error ? <div className="admin-alert">{error}</div> : null}
+
+        <section className="vault-layout">
+          <aside className="vault-list-panel">
+            <div className="vault-list-heading">
+              <h2>Saved Documents</h2>
+              <span>{documents.length}</span>
+            </div>
+            {isLoading ? (
+              <div className="empty-state">Loading documents...</div>
+            ) : documents.length === 0 ? (
+              <div className="empty-state">
+                No documents saved yet. Open a template, fill the form, and
+                click Save to Vault.
+              </div>
+            ) : (
+              <div className="vault-document-list">
+                {documents.map((document) => (
+                  <button
+                    className={`vault-document-row ${
+                      selectedDocument?.id === document.id ? "active" : ""
+                    }`}
+                    key={document.id}
+                    type="button"
+                    onClick={() => setSelectedId(document.id)}
+                  >
+                    <strong>{document.title}</strong>
+                    <span>{document.templateTitle || document.contract.contractTitle}</span>
+                    <small>{formatTimestamp(document.updatedAt || document.createdAt)}</small>
+                  </button>
+                ))}
+              </div>
+            )}
+          </aside>
+
+          <section className="vault-preview-panel">
+            {selectedDocument ? (
+              <>
+                <div className="vault-preview-header">
+                  <div>
+                    <h2>{selectedDocument.title}</h2>
+                    <p>
+                      {selectedDocument.templatePath || "Contract Studio"}{" | "}
+                      {formatTimestamp(
+                        selectedDocument.updatedAt || selectedDocument.createdAt,
+                      )}
+                    </p>
+                  </div>
+                  <div className="vault-actions">
+                    <button
+                      className="button secondary"
+                      type="button"
+                      onClick={() => openDocumentInStudio(selectedDocument)}
+                    >
+                      <Wand2 size={17} />
+                      <span>Open Studio</span>
+                    </button>
+                    <button
+                      className="button secondary"
+                      type="button"
+                      onClick={() =>
+                        void downloadContractPdf(
+                          selectedDocument.contract,
+                          selectedDocument.sections,
+                          selectedDocument.signers,
+                          selectedDocument.status || "Draft",
+                        )
+                      }
+                    >
+                      <Download size={17} />
+                      <span>PDF</span>
+                    </button>
+                    <button
+                      className="icon-button danger"
+                      type="button"
+                      aria-label="Delete document"
+                      onClick={() => void removeDocument(selectedDocument.id)}
+                    >
+                      <Trash2 size={17} />
+                    </button>
+                  </div>
+                </div>
+                <ContractDocument
+                  auditEvents={selectedDocument.auditEvents}
+                  contract={selectedDocument.contract}
+                  sections={selectedDocument.sections}
+                  signers={selectedDocument.signers}
+                  status={selectedDocument.status || "Draft"}
+                />
+              </>
+            ) : (
+              <div className="empty-state">
+                Select a saved document to preview it here.
+              </div>
+            )}
+          </section>
+        </section>
+      </main>
+      <PublicFooter />
+    </div>
+  );
+}
+
 function PrivacyPage() {
   usePageMetadata({
     canonicalPath: "/privacy",
@@ -2904,6 +3582,15 @@ function PrivacyPage() {
             UTM parameters when present. We also collect first-party analytics
             events such as page views and template PDF downloads. We do not
             submit the filled contract terms to the lead capture API.
+          </p>
+        </section>
+
+        <section>
+          <h2>Account Vault</h2>
+          <p>
+            If you create an account and save a document to your vault, we store
+            the contract draft, selected template, signer details, and audit
+            events needed to reload that document for your account.
           </p>
         </section>
 
@@ -3198,6 +3885,9 @@ function SeoTemplatePage({ config }: { config: SeoTemplateConfig }) {
     config.defaultValues,
   );
   const [postDownloadOpen, setPostDownloadOpen] = useState(false);
+  const [vaultSaveState, setVaultSaveState] =
+    useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [vaultMessage, setVaultMessage] = useState("");
   const [downloadContext, setDownloadContext] = useState<{
     downloadedAt: string;
     id: string;
@@ -3262,6 +3952,45 @@ function SeoTemplatePage({ config }: { config: SeoTemplateConfig }) {
     });
     setDownloadContext({ downloadedAt, id: leadRecord.id });
     setPostDownloadOpen(true);
+  }
+
+  async function saveTemplateToVault() {
+    setVaultSaveState("saving");
+    setVaultMessage("");
+
+    try {
+      const session = await getUsableAuthSession();
+      if (!session) {
+        window.location.href = getLoginUrl(config.path);
+        return;
+      }
+
+      await saveVaultDocument(session, {
+        auditEvents,
+        clauses: {},
+        contract,
+        sections,
+        signers,
+        status: "Draft",
+        templatePath: config.path,
+        templateTitle: config.contractTitle,
+        templateValues: values,
+        title: createVaultDocumentTitle(contract),
+      });
+      sendAnalyticsEvent("vault_document_saved", {
+        templatePath: config.path,
+        templateTitle: config.contractTitle,
+      });
+      setVaultSaveState("saved");
+      setVaultMessage("Saved to your document vault.");
+    } catch (requestError) {
+      setVaultSaveState("error");
+      setVaultMessage(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not save to vault.",
+      );
+    }
   }
 
   return (
@@ -3331,6 +4060,30 @@ function SeoTemplatePage({ config }: { config: SeoTemplateConfig }) {
                 <span>Open Studio</span>
               </a>
             </div>
+            <button
+              className="button secondary template-download full-width"
+              disabled={vaultSaveState === "saving"}
+              type="button"
+              onClick={saveTemplateToVault}
+            >
+              <FolderOpen size={18} />
+              <span>
+                {vaultSaveState === "saving"
+                  ? "Saving..."
+                  : vaultSaveState === "saved"
+                    ? "Saved to Vault"
+                    : "Save to Vault"}
+              </span>
+            </button>
+            {vaultMessage ? (
+              <div
+                className={`modal-status ${
+                  vaultSaveState === "error" ? "local" : "success"
+                }`}
+              >
+                {vaultMessage}
+              </div>
+            ) : null}
           </div>
 
           <div className="template-preview-panel">
@@ -3881,6 +4634,9 @@ function ContractBuilderApp() {
     method: SignatureMethod;
   } | null>(null);
   const [consentChecked, setConsentChecked] = useState(false);
+  const [vaultSaveState, setVaultSaveState] =
+    useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [vaultMessage, setVaultMessage] = useState("");
 
   const sections = useMemo(
     () => buildContractSections(contract, clauses),
@@ -3939,6 +4695,49 @@ function ContractBuilderApp() {
       JSON.stringify({ contract, clauses, signers, auditEvents }),
     );
     addAudit("System", "Draft saved", `${contract.contractTitle} saved locally.`);
+  }
+
+  async function saveStudioToVault() {
+    setVaultSaveState("saving");
+    setVaultMessage("");
+
+    try {
+      const session = await getUsableAuthSession();
+      if (!session) {
+        window.location.href = getLoginUrl("/builder");
+        return;
+      }
+
+      const saveEvent = createAuditEvent(
+        "System",
+        "Saved to vault",
+        `${contract.contractTitle} saved to the account document vault.`,
+      );
+      const nextAuditEvents = [saveEvent, ...auditEvents];
+
+      await saveVaultDocument(session, {
+        auditEvents: nextAuditEvents,
+        clauses,
+        contract,
+        sections,
+        signers,
+        status,
+        templatePath: "",
+        templateTitle: contract.contractTitle,
+        templateValues: {},
+        title: createVaultDocumentTitle(contract),
+      });
+      setAuditEvents(nextAuditEvents);
+      setVaultSaveState("saved");
+      setVaultMessage("Saved to your document vault.");
+    } catch (requestError) {
+      setVaultSaveState("error");
+      setVaultMessage(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not save to vault.",
+      );
+    }
   }
 
   function resetWorkspace() {
@@ -4082,6 +4881,7 @@ function ContractBuilderApp() {
         <nav className="public-nav" style={{ margin: '0 12px 0 auto' }}>
           <a href="/">Home</a>
           <a href="/templates">Template Hub</a>
+          <a href="/dashboard">Vault</a>
           <a href="/admin/leads">Admin</a>
         </nav>
 
@@ -4090,6 +4890,22 @@ function ContractBuilderApp() {
           <button className="button secondary" type="button" onClick={saveDraft}>
             <Save size={17} />
             <span>Save</span>
+          </button>
+          <button
+            className="button secondary"
+            disabled={vaultSaveState === "saving"}
+            type="button"
+            onClick={saveStudioToVault}
+            title={vaultMessage || undefined}
+          >
+            <FolderOpen size={17} />
+            <span>
+              {vaultSaveState === "saving"
+                ? "Saving..."
+                : vaultSaveState === "saved"
+                  ? "Vault"
+                  : "Vault"}
+            </span>
           </button>
           <button
             className="button secondary"
@@ -4109,6 +4925,16 @@ function ContractBuilderApp() {
           </button>
         </div>
       </header>
+
+      {vaultMessage ? (
+        <div
+          className={`builder-vault-status no-print ${
+            vaultSaveState === "error" ? "error" : "success"
+          }`}
+        >
+          {vaultMessage}
+        </div>
+      ) : null}
 
       <div className="workspace">
         <aside className="builder-panel no-print" aria-label="Contract builder">
@@ -4913,6 +5739,14 @@ function App() {
 
   if (pathname === "/builder") {
     return <ContractBuilderApp />;
+  }
+
+  if (pathname === "/login") {
+    return <AuthPage />;
+  }
+
+  if (pathname === "/dashboard") {
+    return <DashboardPage />;
   }
 
   if (pathname === "/privacy") {

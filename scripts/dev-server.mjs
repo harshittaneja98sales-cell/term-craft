@@ -7,7 +7,7 @@ const host = "127.0.0.1";
 const port = Number(process.env.PORT ?? 5173);
 
 const app = express();
-app.use(express.json({ limit: "64kb" }));
+app.use(express.json({ limit: "2mb" }));
 registerApiRoutes(app);
 
 const vite = await createViteServer({

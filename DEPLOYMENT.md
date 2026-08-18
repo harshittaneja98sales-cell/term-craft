@@ -14,6 +14,7 @@ Use Render for the first launch because this app includes a Node/Express API for
   - `SITE_URL=https://usetermcraft.com`
   - `SUPABASE_URL`
   - `SUPABASE_SERVICE_ROLE_KEY`
+  - `SUPABASE_PUBLISHABLE_KEY`
   - `ADMIN_API_KEY`
   - `RESEND_API_KEY`
   - `EMAIL_FROM`
@@ -21,9 +22,9 @@ Use Render for the first launch because this app includes a Node/Express API for
 
 The included `render.yaml` defines these settings as a Render Blueprint.
 
-## Durable Lead Storage
+## Durable Lead, Analytics, and Vault Storage
 
-The app can run without Supabase, but Render Free does not provide durable local storage. For production lead capture:
+The app can run without Supabase, but Render Free does not provide durable local storage. For production lead capture, analytics, accounts, and saved documents:
 
 1. Create a Supabase project.
 2. Open the Supabase SQL Editor.
@@ -31,10 +32,13 @@ The app can run without Supabase, but Render Free does not provide durable local
 4. In Render > term-craft > Environment, add:
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
+   - `SUPABASE_PUBLISHABLE_KEY`
    - `ADMIN_API_KEY`
 5. Redeploy the service.
 
-Production admin routes require `ADMIN_API_KEY`. The service role key must stay server-side. Do not put it in frontend code or public docs.
+Production admin routes require `ADMIN_API_KEY`. `SUPABASE_PUBLISHABLE_KEY` powers account signup/login. The service role key must stay server-side. Do not put it in frontend code or public docs.
+
+In Supabase > Authentication > URL Configuration, set the Site URL to `https://usetermcraft.com` and add `https://usetermcraft.com/dashboard` as a redirect URL so signup confirmation emails return users to the app.
 
 ## Email Delivery
 

@@ -52,3 +52,70 @@ create index if not exists analytics_events_path_idx
   on public.analytics_events (path);
 
 alter table public.analytics_events enable row level security;
+
+create extension if not exists pgcrypto;
+
+create table if not exists public.documents (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  title text not null,
+  template_title text not null default '',
+  template_path text not null default '',
+  status text not null default 'draft',
+  contract_data jsonb not null default '{}'::jsonb,
+  sections jsonb not null default '[]'::jsonb,
+  signers jsonb not null default '[]'::jsonb,
+  clauses jsonb not null default '{}'::jsonb,
+  audit_events jsonb not null default '[]'::jsonb,
+  template_values jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists documents_user_updated_at_idx
+  on public.documents (user_id, updated_at desc);
+
+create index if not exists documents_template_path_idx
+  on public.documents (template_path);
+
+alter table public.documents enable row level security;
+
+grant select, insert, update, delete on public.documents to authenticated;
+
+drop policy if exists "Users can read own documents" on public.documents;
+create policy "Users can read own documents"
+  on public.documents
+  for select
+  using (auth.uid() = user_id);
+
+drop policy if exists "Users can insert own documents" on public.documents;
+create policy "Users can insert own documents"
+  on public.documents
+  for insert
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Users can update own documents" on public.documents;
+create policy "Users can update own documents"
+  on public.documents
+  for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Users can delete own documents" on public.documents;
+create policy "Users can delete own documents"
+  on public.documents
+  for delete
+  using (auth.uid() = user_id);
+
+create or replace function public.set_documents_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists documents_set_updated_at on public.documents;
+create trigger documents_set_updated_at
+  before update on public.documents
+  for each row execute function public.set_documents_updated_at();
