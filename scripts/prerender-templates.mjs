@@ -7,8 +7,14 @@ const schemaBaseUrl = sitemapBaseUrl.replace(/\/$/, "");
 const distDir = path.resolve(process.cwd(), "dist");
 const shellPath = path.join(distDir, "index.html");
 const shell = fs.readFileSync(shellPath, "utf8");
+const additionalTemplateDefinitions = JSON.parse(
+  fs.readFileSync(
+    path.resolve(process.cwd(), "src", "additional-templates.json"),
+    "utf8",
+  ),
+);
 
-const pages = [
+const basePages = [
   {
     path: "/templates/b2b-lead-generation-retainer-agreement",
     title: "B2B Lead Generation Retainer Agreement Template | Free PDF",
@@ -144,6 +150,26 @@ const pages = [
       ["Why include client list protection?", "Client lists and prospect data can be among an agency's most valuable assets, so a specific clause is clearer than a generic confidentiality paragraph."],
     ],
   },
+];
+
+function mapAdditionalTemplatePage(definition) {
+  return {
+    path: definition.path,
+    title: definition.title,
+    description: definition.metaDescription,
+    h1: definition.h1,
+    intro: definition.intro,
+    fields: definition.fields.map((field) => field.label),
+    cards: definition.seo.cards.map((card) => [card.title, card.body]),
+    faq: definition.seo.faqs.map((faq) => [faq.question, faq.answer]),
+  };
+}
+
+const pages = [
+  ...basePages,
+  ...additionalTemplateDefinitions.map((definition) =>
+    mapAdditionalTemplatePage(definition),
+  ),
 ];
 
 function escapeHtml(value) {

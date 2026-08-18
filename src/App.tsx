@@ -23,6 +23,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import additionalTemplatesRaw from "./additional-templates.json";
 
 type TemplateKey = "saas" | "services" | "nda" | "dpa";
 type ClauseKey =
@@ -1216,6 +1217,29 @@ type SeoTemplateConfig = {
   };
 };
 
+type AdditionalTemplateDefinition = {
+  path: string;
+  title: string;
+  metaDescription: string;
+  h1: string;
+  intro: string;
+  contractTitle: string;
+  planName: string;
+  templateType?: TemplateKey;
+  providerNameKey: string;
+  clientNameKey: string;
+  scopeKey: string;
+  feeKey: string;
+  dateKey: string;
+  termMonths?: number;
+  fields: SeoTemplateField[];
+  defaultValues: Record<string, string>;
+  seo: SeoTemplateConfig["seo"];
+};
+
+const additionalTemplateDefinitions =
+  additionalTemplatesRaw as unknown as AdditionalTemplateDefinition[];
+
 const templateIconMap: Record<TemplateIconKey, typeof Users> = {
   users: Users,
   money: BadgeDollarSign,
@@ -1245,7 +1269,162 @@ function createTemplateSignerList(
   ];
 }
 
-const seoTemplateConfigs: Record<string, SeoTemplateConfig> = {
+function getTemplateValue(
+  definition: AdditionalTemplateDefinition,
+  values: Record<string, string>,
+  key: string,
+  fallback = "",
+) {
+  return values[key] || definition.defaultValues[key] || fallback;
+}
+
+function createGenericTemplateContract(
+  definition: AdditionalTemplateDefinition,
+  values: Record<string, string>,
+): ContractState {
+  return {
+    template: definition.templateType ?? "services",
+    contractTitle: definition.contractTitle,
+    providerName: getTemplateValue(
+      definition,
+      values,
+      definition.providerNameKey,
+      "Service Provider",
+    ),
+    providerAddress: "Provider address to be inserted",
+    customerName: getTemplateValue(
+      definition,
+      values,
+      definition.clientNameKey,
+      "Client",
+    ),
+    customerAddress: "Client address to be inserted",
+    serviceName: getTemplateValue(
+      definition,
+      values,
+      definition.scopeKey,
+      definition.planName,
+    ),
+    planName: definition.planName,
+    feeAmount: getTemplateValue(
+      definition,
+      values,
+      definition.feeKey,
+      "Fees stated in this agreement",
+    ),
+    billingCycle: "as stated in this agreement",
+    effectiveDate: getTemplateValue(
+      definition,
+      values,
+      definition.dateKey,
+      new Date().toISOString().slice(0, 10),
+    ),
+    termMonths: definition.termMonths ?? 6,
+    renewalTerm: "successive one-month renewal terms unless either party gives written notice",
+    paymentDueDays: 15,
+    terminationNoticeDays: 30,
+    governingLaw: "Delaware",
+    dataRegion: "United States",
+    supportResponse: "two business days",
+    liabilityCap: "fees paid under this agreement in the three months before the claim",
+    specialTerms: definition.seo.cards.map((card) => card.title).join(", "),
+  };
+}
+
+function buildGenericTemplateSections(
+  definition: AdditionalTemplateDefinition,
+  contract: ContractState,
+  values: Record<string, string>,
+): ContractSection[] {
+  const excludedKeys = new Set([
+    definition.providerNameKey,
+    definition.clientNameKey,
+    definition.dateKey,
+  ]);
+  const dynamicSections = definition.fields
+    .filter((field) => !excludedKeys.has(field.key))
+    .map((field) => ({
+      heading: field.label,
+      body: getTemplateValue(
+        definition,
+        values,
+        field.key,
+        `${field.label} to be completed by the parties.`,
+      ),
+    }));
+
+  return [
+    {
+      heading: "Parties",
+      body: `This ${definition.contractTitle} is entered into by ${contract.providerName} ("Provider") and ${contract.customerName} ("Client") as of ${formatDate(contract.effectiveDate)}.`,
+    },
+    ...dynamicSections,
+    {
+      heading: "Client Responsibilities",
+      body: "Client will provide timely access, approvals, information, materials, decisions, and cooperation reasonably needed for Provider to perform the services or obligations described in this agreement.",
+    },
+    {
+      heading: "Confidentiality",
+      body: "Each party will protect non-public business, customer, technical, financial, marketing, and operational information received from the other party and will use it only to perform or evaluate this agreement.",
+    },
+    {
+      heading: "Work Product and Usage Rights",
+      body: "Ownership, license, and usage rights are governed by the specific terms stated in this agreement. Provider retains pre-existing tools, templates, methods, know-how, and reusable materials unless expressly assigned in writing.",
+    },
+    {
+      heading: "Payment Terms",
+      body: `Undisputed invoices are due within ${contract.paymentDueDays} days after receipt unless a different payment schedule is stated in the agreement.`,
+    },
+    {
+      heading: "Term and Termination",
+      body: `The initial term begins on ${formatDate(contract.effectiveDate)} and continues for ${contract.termMonths} months unless completed earlier or terminated under this agreement. Either party may terminate by giving ${contract.terminationNoticeDays} days' written notice.`,
+    },
+    {
+      heading: "Limitation of Liability",
+      body: `Except for payment obligations, confidentiality breaches, IP misuse, and willful misconduct, each party's aggregate liability will not exceed ${contract.liabilityCap}.`,
+    },
+    {
+      heading: "General Terms",
+      body: `This agreement is governed by the laws of ${contract.governingLaw}. Changes must be in writing and accepted by both parties. This template is a practical first draft and should be reviewed before production use.`,
+    },
+  ];
+}
+
+function createAdditionalSeoTemplateConfig(
+  definition: AdditionalTemplateDefinition,
+): SeoTemplateConfig {
+  const defaultValues = {
+    ...definition.defaultValues,
+    [definition.dateKey]: new Date().toISOString().slice(0, 10),
+  };
+
+  return {
+    path: definition.path,
+    title: definition.title,
+    metaDescription: definition.metaDescription,
+    h1: definition.h1,
+    intro: definition.intro,
+    statCards: [
+      { icon: "users", label: "Party details" },
+      { icon: "money", label: "Commercial terms" },
+      { icon: "target", label: "Scope controls" },
+      { icon: "database", label: "Key clauses" },
+    ],
+    fields: definition.fields,
+    defaultValues,
+    providerNameKey: definition.providerNameKey,
+    clientNameKey: definition.clientNameKey,
+    contractTitle: definition.contractTitle,
+    planName: definition.planName,
+    createContract: (values) =>
+      createGenericTemplateContract(definition, values),
+    buildSections: (contract, values) =>
+      buildGenericTemplateSections(definition, contract, values),
+    seo: definition.seo,
+  };
+}
+
+const baseSeoTemplateConfigs: Record<string, SeoTemplateConfig> = {
   "/templates/b2b-lead-generation-retainer-agreement": {
     path: "/templates/b2b-lead-generation-retainer-agreement",
     title: "B2B Lead Generation Retainer Agreement Template | Free PDF",
@@ -1997,11 +2176,36 @@ const seoTemplateConfigs: Record<string, SeoTemplateConfig> = {
   },
 };
 
+const additionalSeoTemplateConfigs = Object.fromEntries(
+  additionalTemplateDefinitions.map((definition) => [
+    definition.path,
+    createAdditionalSeoTemplateConfig(definition),
+  ]),
+) as Record<string, SeoTemplateConfig>;
+
+const seoTemplateConfigs: Record<string, SeoTemplateConfig> = {
+  ...baseSeoTemplateConfigs,
+  ...additionalSeoTemplateConfigs,
+};
+
 const seoTemplateList = Object.values(seoTemplateConfigs);
 
 function getTemplateTags(config: SeoTemplateConfig) {
+  const ignoredKeys = new Set([
+    config.providerNameKey,
+    config.clientNameKey,
+    "startDate",
+    "effectiveDate",
+    "expirationDate",
+  ]);
+
   return config.fields
-    .filter((field) => !["clientName", "providerName", "agencyName", "counterpartyName", "developerName", "subcontractorName", "startDate"].includes(field.key))
+    .filter(
+      (field) =>
+        !ignoredKeys.has(field.key) &&
+        !field.key.toLowerCase().endsWith("name") &&
+        !field.key.toLowerCase().includes("date"),
+    )
     .slice(0, 4)
     .map((field) => field.label);
 }

@@ -1,0 +1,1041 @@
+[
+  {
+    "path": "/templates/ugc-creator-agreement",
+    "title": "Influencer UGC Creator Agreement Template | Free PDF",
+    "metaDescription": "Generate a free influencer and UGC creator agreement PDF with campaign fee, content deliverables, usage rights, posting schedule, and exclusivity terms.",
+    "h1": "Influencer UGC Creator Agreement Template",
+    "intro": "Create a practical creator agreement for brands, agencies, influencers, and UGC creators covering content deliverables, usage rights, approvals, and campaign payment terms.",
+    "contractTitle": "Influencer UGC Creator Agreement",
+    "planName": "UGC creator campaign",
+    "providerNameKey": "creatorName",
+    "clientNameKey": "brandName",
+    "scopeKey": "contentDeliverables",
+    "feeKey": "campaignFee",
+    "dateKey": "startDate",
+    "termMonths": 3,
+    "fields": [
+      { "key": "brandName", "label": "Brand or Client Name" },
+      { "key": "creatorName", "label": "Influencer or Creator Name" },
+      { "key": "campaignFee", "label": "Campaign Fee" },
+      { "key": "contentDeliverables", "label": "Content Deliverables", "multiline": true, "rows": 4 },
+      { "key": "usageRights", "label": "Usage Rights", "multiline": true, "rows": 4 },
+      { "key": "postingSchedule", "label": "Posting Schedule" },
+      { "key": "exclusivityTerms", "label": "Exclusivity Terms", "multiline": true, "rows": 4 },
+      { "key": "startDate", "label": "Start Date", "type": "date" }
+    ],
+    "defaultValues": {
+      "brandName": "Acme Growth LLC",
+      "creatorName": "Bright Frame Studio",
+      "campaignFee": "$1,500 total campaign fee",
+      "contentDeliverables": "Creator will produce three short-form UGC videos, five raw hooks, captions, and usage-ready files for paid social testing.",
+      "usageRights": "Brand may use approved content in organic social, paid ads, website placements, and email campaigns for six months after delivery.",
+      "postingSchedule": "Final content due within 14 days after product receipt and brief approval.",
+      "exclusivityTerms": "Creator will not promote directly competing products for 30 days after the final campaign post.",
+      "startDate": "2026-08-18"
+    },
+    "seo": {
+      "coversHeading": "What This UGC Creator Agreement Covers",
+      "coversIntro": "This influencer and UGC creator agreement template helps brands and creators define the commercial terms, creative obligations, and content usage rules before a campaign starts.",
+      "cards": [
+        { "title": "Content Deliverables", "body": "Defines videos, posts, captions, raw files, hooks, edits, and other creator assets included in the campaign." },
+        { "title": "Usage Rights", "body": "Sets where and how the brand may use creator content, including paid ads, organic social, websites, and email." },
+        { "title": "Posting Schedule", "body": "Documents production timing, review deadlines, post dates, and delivery expectations." },
+        { "title": "Exclusivity Terms", "body": "Clarifies whether the creator may work with competing brands during or after the campaign." }
+      ],
+      "whenHeading": "When To Use This Template",
+      "whenBody": "Use this template before hiring an influencer, UGC creator, creator studio, or social content partner for campaign assets or sponsored posts.",
+      "faqs": [
+        { "question": "What is a UGC creator agreement?", "answer": "It is a contract that defines creator deliverables, payment, approvals, content usage rights, posting duties, and campaign restrictions." },
+        { "question": "Should usage rights be written into the agreement?", "answer": "Yes. Usage rights control whether the brand can use creator content in ads, organic posts, email, websites, and other channels." },
+        { "question": "Can I download this UGC agreement as a PDF?", "answer": "Yes. The page generates a clean, unwatermarked PDF from the fields you complete." }
+      ]
+    }
+  },
+  {
+    "path": "/templates/social-media-management-contract",
+    "title": "Social Media Management Retainer Contract Template | Free PDF",
+    "metaDescription": "Generate a free social media management retainer contract PDF with monthly fee, managed platforms, posting cadence, approval workflow, and ad spend handling.",
+    "h1": "Social Media Management Retainer Contract Template",
+    "intro": "Create a social media management agreement for agencies, freelancers, and clients covering recurring services, approvals, content schedules, and reporting.",
+    "contractTitle": "Social Media Management Retainer Contract",
+    "planName": "Social media management retainer",
+    "providerNameKey": "agencyName",
+    "clientNameKey": "clientName",
+    "scopeKey": "platformsManaged",
+    "feeKey": "monthlyRetainer",
+    "dateKey": "startDate",
+    "termMonths": 6,
+    "fields": [
+      { "key": "clientName", "label": "Client Name" },
+      { "key": "agencyName", "label": "Social Media Agency Name" },
+      { "key": "monthlyRetainer", "label": "Monthly Retainer" },
+      { "key": "platformsManaged", "label": "Platforms Managed", "multiline": true, "rows": 3 },
+      { "key": "postingCadence", "label": "Posting Cadence" },
+      { "key": "approvalWorkflow", "label": "Approval Workflow", "multiline": true, "rows": 4 },
+      { "key": "adSpendHandling", "label": "Ad Spend Handling", "multiline": true, "rows": 3 },
+      { "key": "startDate", "label": "Start Date", "type": "date" }
+    ],
+    "defaultValues": {
+      "clientName": "Acme Growth LLC",
+      "agencyName": "Northstar Social Studio",
+      "monthlyRetainer": "$3,000 per month",
+      "platformsManaged": "LinkedIn, Instagram, Facebook, TikTok, and YouTube Shorts.",
+      "postingCadence": "Four feed posts and three short-form videos per week.",
+      "approvalWorkflow": "Client will approve monthly content calendars within three business days. Delayed approval may shift publishing dates.",
+      "adSpendHandling": "Client pays platform ad spend directly. Agency management fees do not include media budget or third-party creative costs.",
+      "startDate": "2026-08-18"
+    },
+    "seo": {
+      "coversHeading": "What This Social Media Management Contract Covers",
+      "coversIntro": "This template defines the recurring commercial and operating terms for social media retainers.",
+      "cards": [
+        { "title": "Monthly Retainer", "body": "Documents the recurring fee for strategy, content planning, scheduling, community management, and reporting." },
+        { "title": "Managed Platforms", "body": "Lists the social channels included in the scope so out-of-scope platforms are easier to identify." },
+        { "title": "Posting Cadence", "body": "Sets the publishing volume and content rhythm expected from the agency or freelancer." },
+        { "title": "Approval Workflow", "body": "Explains how content is reviewed, approved, revised, and delayed when client feedback is late." }
+      ],
+      "whenHeading": "When To Use This Template",
+      "whenBody": "Use this template when a social media agency or freelancer manages ongoing content, calendars, publishing, reporting, or paid social coordination for a client.",
+      "faqs": [
+        { "question": "What should a social media management contract include?", "answer": "It should include scope, platforms, content cadence, approval workflow, fees, ad spend handling, reporting, and termination terms." },
+        { "question": "Does this template cover ad spend?", "answer": "Yes. The form includes an ad spend handling field so the contract can separate management fees from media budget." },
+        { "question": "Is the PDF watermarked?", "answer": "No. The PDF download is clean and unwatermarked." }
+      ]
+    }
+  },
+  {
+    "path": "/templates/saas-service-level-agreement",
+    "title": "SaaS Service Level Agreement SLA Template | Free PDF",
+    "metaDescription": "Generate a free SaaS service level agreement PDF with uptime commitment, support response times, service credits, maintenance windows, and escalation terms.",
+    "h1": "SaaS Service Level Agreement SLA Template",
+    "intro": "Create a SaaS SLA for uptime commitments, support response targets, service credits, scheduled maintenance, and customer remedies.",
+    "contractTitle": "SaaS Service Level Agreement",
+    "planName": "SaaS service level commitment",
+    "providerNameKey": "providerName",
+    "clientNameKey": "customerName",
+    "scopeKey": "serviceName",
+    "feeKey": "serviceCredits",
+    "dateKey": "startDate",
+    "termMonths": 12,
+    "fields": [
+      { "key": "customerName", "label": "Customer Name" },
+      { "key": "providerName", "label": "SaaS Provider Name" },
+      { "key": "serviceName", "label": "Service Name" },
+      { "key": "uptimeCommitment", "label": "Uptime Commitment" },
+      { "key": "supportResponseTimes", "label": "Support Response Times", "multiline": true, "rows": 4 },
+      { "key": "serviceCredits", "label": "Service Credits", "multiline": true, "rows": 4 },
+      { "key": "maintenanceWindow", "label": "Maintenance Window" },
+      { "key": "startDate", "label": "Effective Date", "type": "date" }
+    ],
+    "defaultValues": {
+      "customerName": "Acme Growth LLC",
+      "providerName": "Cloudline SaaS Inc.",
+      "serviceName": "Cloudline Platform",
+      "uptimeCommitment": "99.9% monthly uptime excluding scheduled maintenance and customer-caused issues.",
+      "supportResponseTimes": "Priority 1: 1 business hour. Priority 2: 4 business hours. Priority 3: 1 business day.",
+      "serviceCredits": "If monthly uptime falls below 99.9%, Customer may receive a service credit equal to 10% of the monthly subscription fee for the affected service.",
+      "maintenanceWindow": "Scheduled maintenance may occur Sundays between 12:00 AM and 4:00 AM UTC with reasonable advance notice.",
+      "startDate": "2026-08-18"
+    },
+    "seo": {
+      "coversHeading": "What This SaaS SLA Covers",
+      "coversIntro": "This SaaS SLA template helps software vendors and customers document uptime, support, service credit, and maintenance expectations.",
+      "cards": [
+        { "title": "Uptime Commitment", "body": "Sets the service availability target and identifies exclusions like maintenance or customer-side failures." },
+        { "title": "Support Response Times", "body": "Defines response targets by priority level so urgent incidents are handled clearly." },
+        { "title": "Service Credits", "body": "Documents the customer remedy if the provider misses the stated uptime commitment." },
+        { "title": "Maintenance Window", "body": "Clarifies when scheduled maintenance may occur and whether advance notice is required." }
+      ],
+      "whenHeading": "When To Use This Template",
+      "whenBody": "Use this template when selling or buying SaaS subscriptions where uptime, response targets, or service credits matter.",
+      "faqs": [
+        { "question": "What is a SaaS service level agreement?", "answer": "It is a contract section or standalone document that defines uptime, support response targets, maintenance, exclusions, and service credits." },
+        { "question": "Should every SaaS contract include an SLA?", "answer": "Not always, but it is useful when customers rely on the software for business-critical workflows." },
+        { "question": "Can service credits replace other remedies?", "answer": "Many SaaS SLAs make service credits the exclusive remedy for uptime failures, but that should be reviewed for the specific deal." }
+      ]
+    }
+  },
+  {
+    "path": "/templates/independent-contractor-agreement",
+    "title": "Independent Contractor Agreement Template | Free PDF",
+    "metaDescription": "Generate a free independent contractor agreement PDF with scope of services, compensation, contractor status, confidentiality, and work product ownership.",
+    "h1": "Independent Contractor Agreement Template",
+    "intro": "Create a contractor agreement for businesses hiring freelancers, consultants, specialists, or project-based service providers.",
+    "contractTitle": "Independent Contractor Agreement",
+    "planName": "Independent contractor services",
+    "providerNameKey": "contractorName",
+    "clientNameKey": "companyName",
+    "scopeKey": "scopeOfServices",
+    "feeKey": "compensationTerms",
+    "dateKey": "startDate",
+    "termMonths": 6,
+    "fields": [
+      { "key": "companyName", "label": "Company Name" },
+      { "key": "contractorName", "label": "Contractor Name" },
+      { "key": "compensationTerms", "label": "Compensation Terms" },
+      { "key": "scopeOfServices", "label": "Scope of Services", "multiline": true, "rows": 4 },
+      { "key": "deliverableOwnership", "label": "Deliverable Ownership", "multiline": true, "rows": 4 },
+      { "key": "contractorStatus", "label": "Independent Contractor Status", "multiline": true, "rows": 4 },
+      { "key": "confidentialityTerms", "label": "Confidentiality Terms", "multiline": true, "rows": 4 },
+      { "key": "startDate", "label": "Start Date", "type": "date" }
+    ],
+    "defaultValues": {
+      "companyName": "Acme Growth LLC",
+      "contractorName": "Brightline Consulting",
+      "compensationTerms": "$85 per hour, invoiced twice monthly",
+      "scopeOfServices": "Contractor will provide project support, research, implementation, documentation, and advisory services requested by Company.",
+      "deliverableOwnership": "Upon full payment, Company owns custom deliverables created specifically for the engagement. Contractor retains pre-existing tools and know-how.",
+      "contractorStatus": "Contractor controls the manner and means of performance and is responsible for taxes, insurance, equipment, and personnel.",
+      "confidentialityTerms": "Contractor will protect non-public Company, customer, product, financial, and technical information.",
+      "startDate": "2026-08-18"
+    },
+    "seo": {
+      "coversHeading": "What This Independent Contractor Agreement Covers",
+      "coversIntro": "This template documents the basic legal and commercial terms for project-based contractor relationships.",
+      "cards": [
+        { "title": "Scope of Services", "body": "Defines the work the contractor will perform and helps separate included work from out-of-scope requests." },
+        { "title": "Compensation Terms", "body": "Covers hourly, fixed-fee, milestone, or retainer payment structures." },
+        { "title": "Contractor Status", "body": "Clarifies that the contractor is not an employee, partner, or agent of the hiring company." },
+        { "title": "Deliverable Ownership", "body": "Explains when custom work product transfers and what pre-existing materials remain with the contractor." }
+      ],
+      "whenHeading": "When To Use This Template",
+      "whenBody": "Use this template when hiring an independent contractor, freelancer, specialist, or consultant for business services.",
+      "faqs": [
+        { "question": "What is an independent contractor agreement?", "answer": "It is a contract that defines contractor services, fees, ownership, confidentiality, status, and termination terms." },
+        { "question": "Why include contractor status language?", "answer": "It helps show the parties intend an independent contractor relationship rather than an employment relationship." },
+        { "question": "Does this template assign IP?", "answer": "It includes a deliverable ownership field that can tie IP transfer to full payment." }
+      ]
+    }
+  },
+  {
+    "path": "/templates/general-subcontractor-agreement",
+    "title": "General Subcontractor Agreement Template | Free PDF",
+    "metaDescription": "Generate a free general subcontractor agreement PDF with project scope, payment terms, insurance requirements, flow-down obligations, and schedule responsibilities.",
+    "h1": "General Subcontractor Agreement Template",
+    "intro": "Create a subcontractor agreement for prime contractors hiring outside vendors, trades, specialists, or service providers.",
+    "contractTitle": "General Subcontractor Agreement",
+    "planName": "Subcontracted project services",
+    "providerNameKey": "subcontractorName",
+    "clientNameKey": "primeContractorName",
+    "scopeKey": "projectScope",
+    "feeKey": "paymentTerms",
+    "dateKey": "startDate",
+    "termMonths": 6,
+    "fields": [
+      { "key": "primeContractorName", "label": "Prime Contractor Name" },
+      { "key": "subcontractorName", "label": "Subcontractor Name" },
+      { "key": "paymentTerms", "label": "Payment Terms" },
+      { "key": "projectScope", "label": "Project Scope", "multiline": true, "rows": 4 },
+      { "key": "insuranceRequirements", "label": "Insurance Requirements", "multiline": true, "rows": 4 },
+      { "key": "flowDownObligations", "label": "Flow-Down Obligations", "multiline": true, "rows": 4 },
+      { "key": "scheduleResponsibilities", "label": "Schedule Responsibilities", "multiline": true, "rows": 3 },
+      { "key": "startDate", "label": "Start Date", "type": "date" }
+    ],
+    "defaultValues": {
+      "primeContractorName": "Acme Projects LLC",
+      "subcontractorName": "Northstar Specialty Services",
+      "paymentTerms": "$12,000 fixed fee, payable against approved milestones",
+      "projectScope": "Subcontractor will perform the assigned work package, provide qualified labor, coordinate with Prime Contractor, and complete work according to project specifications.",
+      "insuranceRequirements": "Subcontractor will maintain commercially reasonable general liability, workers compensation where required, and any project-specific insurance stated by Prime Contractor.",
+      "flowDownObligations": "Subcontractor will comply with client requirements, site rules, confidentiality obligations, security policies, and applicable terms flowed down from the prime contract.",
+      "scheduleResponsibilities": "Subcontractor will meet agreed project dates and promptly notify Prime Contractor of delays, blockers, or change requests.",
+      "startDate": "2026-08-18"
+    },
+    "seo": {
+      "coversHeading": "What This General Subcontractor Agreement Covers",
+      "coversIntro": "This template helps prime contractors and subcontractors document work scope, payment, insurance, and flowed-down client obligations.",
+      "cards": [
+        { "title": "Project Scope", "body": "Defines the work package assigned to the subcontractor." },
+        { "title": "Payment Terms", "body": "Documents fixed-fee, milestone, hourly, or progress payment structures." },
+        { "title": "Insurance Requirements", "body": "Sets required coverage and proof of insurance expectations." },
+        { "title": "Flow-Down Obligations", "body": "Passes relevant prime contract obligations down to the subcontractor." }
+      ],
+      "whenHeading": "When To Use This Template",
+      "whenBody": "Use this template when a main contractor hires a subcontractor to perform part of a project or client engagement.",
+      "faqs": [
+        { "question": "What is a subcontractor agreement?", "answer": "It is a contract between a prime contractor and subcontractor that defines assigned work, payment, compliance, insurance, and risk allocation." },
+        { "question": "What are flow-down obligations?", "answer": "They are obligations from the prime contract that the subcontractor must follow because they affect the subcontracted work." },
+        { "question": "Can this be used outside construction?", "answer": "Yes. It is general enough for professional services, agency work, field work, and other subcontracted projects." }
+      ]
+    }
+  },
+  {
+    "path": "/templates/video-production-contract",
+    "title": "Video Production Services Contract Template | Free PDF",
+    "metaDescription": "Generate a free video production services contract PDF with production scope, project fee, revision rounds, delivery date, raw footage rights, and licensing terms.",
+    "h1": "Video Production Services Contract Template",
+    "intro": "Create a video production contract for commercial shoots, brand videos, social content, editing packages, and post-production projects.",
+    "contractTitle": "Video Production Services Contract",
+    "planName": "Video production services",
+    "providerNameKey": "productionCompanyName",
+    "clientNameKey": "clientName",
+    "scopeKey": "productionScope",
+    "feeKey": "projectFee",
+    "dateKey": "startDate",
+    "termMonths": 3,
+    "fields": [
+      { "key": "clientName", "label": "Client Name" },
+      { "key": "productionCompanyName", "label": "Production Company Name" },
+      { "key": "projectFee", "label": "Project Fee" },
+      { "key": "productionScope", "label": "Production Scope", "multiline": true, "rows": 4 },
+      { "key": "revisionRounds", "label": "Revision Rounds" },
+      { "key": "rawFootageRights", "label": "Raw Footage Rights", "multiline": true, "rows": 4 },
+      { "key": "deliveryDate", "label": "Final Delivery Date", "type": "date" },
+      { "key": "startDate", "label": "Start Date", "type": "date" }
+    ],
+    "defaultValues": {
+      "clientName": "Acme Growth LLC",
+      "productionCompanyName": "Framehouse Productions",
+      "projectFee": "$8,500 project fee",
+      "productionScope": "Production company will plan, shoot, edit, color correct, mix audio, and deliver one two-minute brand video plus five short social cuts.",
+      "revisionRounds": "Two included revision rounds after first cut delivery.",
+      "rawFootageRights": "Client receives final edited deliverables. Raw footage may be licensed or transferred only if expressly stated and paid for.",
+      "deliveryDate": "2026-09-15",
+      "startDate": "2026-08-18"
+    },
+    "seo": {
+      "coversHeading": "What This Video Production Contract Covers",
+      "coversIntro": "This template helps video producers and clients define project scope, fees, revisions, delivery, and footage rights.",
+      "cards": [
+        { "title": "Production Scope", "body": "Documents shoot planning, filming, editing, audio, color, animation, and final deliverables." },
+        { "title": "Project Fee", "body": "Sets the production price and separates it from talent, travel, rentals, or third-party costs." },
+        { "title": "Revision Rounds", "body": "Clarifies how many edits are included before additional fees apply." },
+        { "title": "Raw Footage Rights", "body": "Explains whether the client receives only final cuts or also raw footage." }
+      ],
+      "whenHeading": "When To Use This Template",
+      "whenBody": "Use this template for brand videos, ads, corporate videos, creator content, event filming, editing, or post-production projects.",
+      "faqs": [
+        { "question": "What should a video production contract include?", "answer": "It should include scope, fee, schedule, included revisions, footage ownership, licenses, expenses, and delivery requirements." },
+        { "question": "Does the client automatically own raw footage?", "answer": "Not always. This template includes a raw footage rights field so the parties can state the rule clearly." },
+        { "question": "Can this template be used for editing-only projects?", "answer": "Yes. Adjust the production scope to describe editing, post-production, or social cutdowns only." }
+      ]
+    }
+  },
+  {
+    "path": "/templates/shopify-store-setup-agreement",
+    "title": "Shopify Store Setup Agreement Template | Free PDF",
+    "metaDescription": "Generate a free Shopify store setup agreement PDF with setup fee, store scope, theme customization, app installations, launch date, and client responsibilities.",
+    "h1": "Shopify Store Setup Agreement Template",
+    "intro": "Create a Shopify setup agreement for freelancers, studios, and clients launching or redesigning an online store.",
+    "contractTitle": "Shopify Store Setup Agreement",
+    "planName": "Shopify store setup",
+    "providerNameKey": "developerName",
+    "clientNameKey": "clientName",
+    "scopeKey": "storeSetupScope",
+    "feeKey": "setupFee",
+    "dateKey": "startDate",
+    "termMonths": 3,
+    "fields": [
+      { "key": "clientName", "label": "Client Name" },
+      { "key": "developerName", "label": "Shopify Developer Name" },
+      { "key": "setupFee", "label": "Setup Fee" },
+      { "key": "storeSetupScope", "label": "Store Setup Scope", "multiline": true, "rows": 4 },
+      { "key": "themeCustomization", "label": "Theme Customization", "multiline": true, "rows": 4 },
+      { "key": "appInstallations", "label": "App Installations" },
+      { "key": "launchDate", "label": "Launch Date", "type": "date" },
+      { "key": "startDate", "label": "Start Date", "type": "date" }
+    ],
+    "defaultValues": {
+      "clientName": "Acme Growth LLC",
+      "developerName": "Northstar Shopify Studio",
+      "setupFee": "$5,000 project setup fee",
+      "storeSetupScope": "Developer will configure Shopify theme, navigation, product templates, collections, checkout settings, core pages, analytics tags, and launch support.",
+      "themeCustomization": "Theme customization includes layout adjustments, homepage sections, product page setup, typography, colors, and brand-aligned styling within the selected theme.",
+      "appInstallations": "Up to five approved Shopify apps for reviews, email capture, analytics, upsells, and shipping support.",
+      "launchDate": "2026-09-20",
+      "startDate": "2026-08-18"
+    },
+    "seo": {
+      "coversHeading": "What This Shopify Store Setup Agreement Covers",
+      "coversIntro": "This template defines the scope, launch responsibilities, and payment terms for Shopify setup projects.",
+      "cards": [
+        { "title": "Setup Fee", "body": "Documents the project price and what is included in the setup package." },
+        { "title": "Store Setup Scope", "body": "Covers pages, products, navigation, checkout settings, analytics, and launch support." },
+        { "title": "Theme Customization", "body": "Defines how far the developer will customize the Shopify theme." },
+        { "title": "App Installations", "body": "Lists Shopify apps included in the project and separates app fees from developer fees." }
+      ],
+      "whenHeading": "When To Use This Template",
+      "whenBody": "Use this template when a developer or agency is setting up, redesigning, or launching a Shopify storefront.",
+      "faqs": [
+        { "question": "What is a Shopify store setup agreement?", "answer": "It is a project contract that defines Shopify setup scope, fee, theme work, apps, launch date, and client responsibilities." },
+        { "question": "Should Shopify app fees be included?", "answer": "Usually app subscription fees should be paid directly by the client unless the parties agree otherwise." },
+        { "question": "Can I use this for a Shopify redesign?", "answer": "Yes. Update the scope to describe the redesign, migration, theme updates, or launch work." }
+      ]
+    }
+  },
+  {
+    "path": "/templates/ppc-management-agreement",
+    "title": "PPC Management Agreement Template | Free PDF",
+    "metaDescription": "Generate a free paid ads PPC management agreement PDF with management fee, ad platforms, ad spend budget, reporting cadence, and conversion tracking scope.",
+    "h1": "PPC Management Agreement Template",
+    "intro": "Create a paid ads management contract for Google Ads, Meta Ads, LinkedIn Ads, TikTok Ads, or multi-channel PPC campaigns.",
+    "contractTitle": "PPC Management Agreement",
+    "planName": "Paid ads management",
+    "providerNameKey": "agencyName",
+    "clientNameKey": "clientName",
+    "scopeKey": "adPlatforms",
+    "feeKey": "monthlyManagementFee",
+    "dateKey": "startDate",
+    "termMonths": 6,
+    "fields": [
+      { "key": "clientName", "label": "Client Name" },
+      { "key": "agencyName", "label": "PPC Agency Name" },
+      { "key": "monthlyManagementFee", "label": "Monthly Management Fee" },
+      { "key": "adPlatforms", "label": "Ad Platforms Managed" },
+      { "key": "adSpendBudget", "label": "Ad Spend Budget" },
+      { "key": "reportingCadence", "label": "Reporting Cadence" },
+      { "key": "conversionTrackingScope", "label": "Conversion Tracking Scope", "multiline": true, "rows": 4 },
+      { "key": "startDate", "label": "Start Date", "type": "date" }
+    ],
+    "defaultValues": {
+      "clientName": "Acme Growth LLC",
+      "agencyName": "Northstar Performance Marketing",
+      "monthlyManagementFee": "$2,500 per month",
+      "adPlatforms": "Google Ads, Meta Ads, and LinkedIn Ads.",
+      "adSpendBudget": "$15,000 monthly media budget paid directly by Client.",
+      "reportingCadence": "Weekly dashboard update plus monthly performance review call.",
+      "conversionTrackingScope": "Agency will configure conversion events, pixels, UTMs, campaign naming, and reporting views using access provided by Client.",
+      "startDate": "2026-08-18"
+    },
+    "seo": {
+      "coversHeading": "What This PPC Management Agreement Covers",
+      "coversIntro": "This PPC agreement template defines paid ads management scope, platform access, budget handling, tracking, and reporting.",
+      "cards": [
+        { "title": "Management Fee", "body": "Sets the agency or freelancer fee separate from platform media spend." },
+        { "title": "Ad Platforms", "body": "Lists which paid media channels are included in the management scope." },
+        { "title": "Ad Spend Budget", "body": "Documents the budget and whether the client pays platforms directly." },
+        { "title": "Conversion Tracking", "body": "Clarifies tracking setup, pixels, UTMs, analytics access, and measurement limitations." }
+      ],
+      "whenHeading": "When To Use This Template",
+      "whenBody": "Use this template when managing paid search, paid social, retargeting, or PPC campaigns for a client.",
+      "faqs": [
+        { "question": "What is a PPC management agreement?", "answer": "It is a contract that defines paid ads management scope, fees, ad spend, tracking, reporting, and client responsibilities." },
+        { "question": "Should ad spend be separate from management fees?", "answer": "Usually yes. This helps avoid confusion between agency compensation and the media budget spent on ad platforms." },
+        { "question": "Does this template guarantee campaign results?", "answer": "No. It documents services and reporting without guaranteeing leads, sales, revenue, or platform performance." }
+      ]
+    }
+  },
+  {
+    "path": "/templates/copywriting-services-contract",
+    "title": "Copywriting Services Contract Template | Free PDF",
+    "metaDescription": "Generate a free copywriting services contract PDF with project fee, copy deliverables, revision rounds, usage rights, deadline, and approval terms.",
+    "h1": "Copywriting Services Contract Template",
+    "intro": "Create a copywriting agreement for landing pages, email sequences, ad copy, website copy, sales pages, and content assets.",
+    "contractTitle": "Copywriting Services Contract",
+    "planName": "Copywriting services",
+    "providerNameKey": "writerName",
+    "clientNameKey": "clientName",
+    "scopeKey": "copyDeliverables",
+    "feeKey": "projectFee",
+    "dateKey": "startDate",
+    "termMonths": 3,
+    "fields": [
+      { "key": "clientName", "label": "Client Name" },
+      { "key": "writerName", "label": "Copywriter Name" },
+      { "key": "projectFee", "label": "Project Fee" },
+      { "key": "copyDeliverables", "label": "Copy Deliverables", "multiline": true, "rows": 4 },
+      { "key": "revisionRounds", "label": "Revision Rounds" },
+      { "key": "usageRights", "label": "Usage Rights", "multiline": true, "rows": 3 },
+      { "key": "deadline", "label": "Final Deadline", "type": "date" },
+      { "key": "startDate", "label": "Start Date", "type": "date" }
+    ],
+    "defaultValues": {
+      "clientName": "Acme Growth LLC",
+      "writerName": "Brightline Copy Studio",
+      "projectFee": "$3,200 project fee",
+      "copyDeliverables": "Writer will deliver one landing page, one five-email nurture sequence, three paid social ad variations, and one revision-ready messaging outline.",
+      "revisionRounds": "Two included revision rounds within 10 business days after first draft delivery.",
+      "usageRights": "Upon full payment, Client may use final approved copy in owned marketing channels and paid campaigns.",
+      "deadline": "2026-09-10",
+      "startDate": "2026-08-18"
+    },
+    "seo": {
+      "coversHeading": "What This Copywriting Services Contract Covers",
+      "coversIntro": "This template helps copywriters and clients document deliverables, payment, revisions, ownership, and deadlines.",
+      "cards": [
+        { "title": "Copy Deliverables", "body": "Defines the exact assets included, such as landing pages, emails, ads, website copy, or scripts." },
+        { "title": "Project Fee", "body": "Documents the writing fee and separates it from strategy, design, implementation, or extra revisions." },
+        { "title": "Revision Rounds", "body": "Sets how many revision cycles are included and when extra fees apply." },
+        { "title": "Usage Rights", "body": "Explains when the client can use final copy and what drafts or concepts remain excluded." }
+      ],
+      "whenHeading": "When To Use This Template",
+      "whenBody": "Use this template when hiring or providing copywriting services for sales, marketing, product, or content assets.",
+      "faqs": [
+        { "question": "What should a copywriting contract include?", "answer": "It should include deliverables, project fee, timeline, revision rounds, approval process, usage rights, and payment terms." },
+        { "question": "Does the client own unused drafts?", "answer": "Usually no unless the contract says so. This template focuses usage rights on final approved copy." },
+        { "question": "Can this be used for email copy?", "answer": "Yes. Add the email sequence details to the copy deliverables field." }
+      ]
+    }
+  },
+  {
+    "path": "/templates/graphic-design-retainer-agreement",
+    "title": "Graphic Design Retainer Agreement Template | Free PDF",
+    "metaDescription": "Generate a free graphic design retainer agreement PDF with monthly retainer, included design hours, deliverable types, revision policy, and brand asset access.",
+    "h1": "Graphic Design Retainer Agreement Template",
+    "intro": "Create a monthly graphic design retainer agreement for ongoing creative support, design hours, deliverables, revisions, and brand asset access.",
+    "contractTitle": "Graphic Design Retainer Agreement",
+    "planName": "Graphic design retainer",
+    "providerNameKey": "designerName",
+    "clientNameKey": "clientName",
+    "scopeKey": "deliverableTypes",
+    "feeKey": "monthlyRetainer",
+    "dateKey": "startDate",
+    "termMonths": 6,
+    "fields": [
+      { "key": "clientName", "label": "Client Name" },
+      { "key": "designerName", "label": "Designer Name" },
+      { "key": "monthlyRetainer", "label": "Monthly Retainer" },
+      { "key": "designHoursIncluded", "label": "Design Hours Included" },
+      { "key": "deliverableTypes", "label": "Deliverable Types", "multiline": true, "rows": 4 },
+      { "key": "revisionPolicy", "label": "Revision Policy", "multiline": true, "rows": 3 },
+      { "key": "brandAssetAccess", "label": "Brand Asset Access", "multiline": true, "rows": 3 },
+      { "key": "startDate", "label": "Start Date", "type": "date" }
+    ],
+    "defaultValues": {
+      "clientName": "Acme Growth LLC",
+      "designerName": "PixelForge Design Co.",
+      "monthlyRetainer": "$2,000 per month",
+      "designHoursIncluded": "20 design hours per month",
+      "deliverableTypes": "Social graphics, ad creatives, email graphics, landing page mockups, presentation slides, and light brand collateral.",
+      "revisionPolicy": "Each design request includes up to two reasonable revision rounds if requested within five business days.",
+      "brandAssetAccess": "Client will provide logos, fonts, colors, brand guidelines, source files, and approved image libraries.",
+      "startDate": "2026-08-18"
+    },
+    "seo": {
+      "coversHeading": "What This Graphic Design Retainer Agreement Covers",
+      "coversIntro": "This template defines how ongoing graphic design support is scoped, requested, revised, and paid.",
+      "cards": [
+        { "title": "Monthly Retainer", "body": "Documents the recurring fee for ongoing design support." },
+        { "title": "Included Design Hours", "body": "Sets the number of hours or request capacity included each month." },
+        { "title": "Deliverable Types", "body": "Lists the creative assets included in the retainer." },
+        { "title": "Revision Policy", "body": "Clarifies included revisions and when additional fees apply." }
+      ],
+      "whenHeading": "When To Use This Template",
+      "whenBody": "Use this template when a designer or creative studio provides recurring design work for a client.",
+      "faqs": [
+        { "question": "What is a graphic design retainer?", "answer": "It is a recurring arrangement where a client pays a monthly fee for ongoing design support." },
+        { "question": "Should unused hours roll over?", "answer": "That depends on the deal. You can add rollover language to the design hours or revision policy fields." },
+        { "question": "Can this be used by agencies?", "answer": "Yes. Agencies can use it for client design retainers or white-label design support." }
+      ]
+    }
+  },
+  {
+    "path": "/templates/affiliate-referral-agreement",
+    "title": "Affiliate Referral Partner Agreement Template | Free PDF",
+    "metaDescription": "Generate a free affiliate and referral partner agreement PDF with commission rate, qualified referral definition, payout schedule, and prohibited marketing methods.",
+    "h1": "Affiliate Referral Partner Agreement Template",
+    "intro": "Create an affiliate or referral agreement for partners who introduce prospects, drive sales, or earn commission on qualified customer referrals.",
+    "contractTitle": "Affiliate Referral Partner Agreement",
+    "planName": "Affiliate and referral partnership",
+    "providerNameKey": "partnerName",
+    "clientNameKey": "companyName",
+    "scopeKey": "qualifiedReferralDefinition",
+    "feeKey": "commissionRate",
+    "dateKey": "startDate",
+    "termMonths": 12,
+    "fields": [
+      { "key": "companyName", "label": "Company Name" },
+      { "key": "partnerName", "label": "Affiliate or Referral Partner Name" },
+      { "key": "commissionRate", "label": "Commission Rate" },
+      { "key": "qualifiedReferralDefinition", "label": "Qualified Referral Definition", "multiline": true, "rows": 4 },
+      { "key": "payoutSchedule", "label": "Payout Schedule" },
+      { "key": "prohibitedMarketingMethods", "label": "Prohibited Marketing Methods", "multiline": true, "rows": 4 },
+      { "key": "trackingMethod", "label": "Tracking Method" },
+      { "key": "startDate", "label": "Start Date", "type": "date" }
+    ],
+    "defaultValues": {
+      "companyName": "Acme Growth LLC",
+      "partnerName": "Northstar Partner Network",
+      "commissionRate": "15% of net revenue from qualified referred customers for the first 12 months",
+      "qualifiedReferralDefinition": "A qualified referral is a prospect introduced by Partner that was not already in Company's active pipeline and becomes a paying customer.",
+      "payoutSchedule": "Commissions are calculated monthly and paid within 30 days after Company receives customer payment.",
+      "prohibitedMarketingMethods": "Partner may not use spam, misleading claims, brand bidding, unauthorized coupons, fake reviews, or unlawful advertising tactics.",
+      "trackingMethod": "Referral links, approved tracking codes, or written introduction records accepted by Company.",
+      "startDate": "2026-08-18"
+    },
+    "seo": {
+      "coversHeading": "What This Affiliate Referral Agreement Covers",
+      "coversIntro": "This template defines partner commission rules, qualified referrals, payout timing, and marketing restrictions.",
+      "cards": [
+        { "title": "Commission Rate", "body": "Sets how the affiliate or referral partner earns compensation." },
+        { "title": "Qualified Referral Definition", "body": "Clarifies what counts as a commissionable customer or lead." },
+        { "title": "Payout Schedule", "body": "Documents when commissions are calculated and paid." },
+        { "title": "Prohibited Marketing Methods", "body": "Restricts spam, misleading ads, brand bidding, and other risky promotion tactics." }
+      ],
+      "whenHeading": "When To Use This Template",
+      "whenBody": "Use this template when launching an affiliate program, referral partner channel, agency referral relationship, or commission-based partnership.",
+      "faqs": [
+        { "question": "What is an affiliate referral agreement?", "answer": "It is a contract that defines partner commissions, tracking, qualified referrals, payout timing, and promotional rules." },
+        { "question": "Why define a qualified referral?", "answer": "It prevents disputes over existing leads, duplicate introductions, low-quality referrals, or customers already in the pipeline." },
+        { "question": "Can this template cover affiliates and referral partners?", "answer": "Yes. Adjust the tracking and commission language to match the channel." }
+      ]
+    }
+  },
+  {
+    "path": "/templates/commercial-lease-addendum",
+    "title": "Commercial Lease Addendum Template | Free PDF",
+    "metaDescription": "Generate a free commercial lease addendum PDF with leased premises, addendum purpose, rent adjustment, improvement responsibilities, and expiration date.",
+    "h1": "Commercial Lease Addendum Template",
+    "intro": "Create a commercial lease addendum to document changes or additions to an existing office, retail, warehouse, or business property lease.",
+    "contractTitle": "Commercial Lease Addendum",
+    "planName": "Commercial lease amendment",
+    "providerNameKey": "landlordName",
+    "clientNameKey": "tenantName",
+    "scopeKey": "addendumPurpose",
+    "feeKey": "rentAdjustment",
+    "dateKey": "effectiveDate",
+    "termMonths": 12,
+    "fields": [
+      { "key": "landlordName", "label": "Landlord Name" },
+      { "key": "tenantName", "label": "Tenant Name" },
+      { "key": "leasedPremises", "label": "Leased Premises" },
+      { "key": "addendumPurpose", "label": "Addendum Purpose", "multiline": true, "rows": 4 },
+      { "key": "rentAdjustment", "label": "Rent Adjustment" },
+      { "key": "improvementResponsibilities", "label": "Improvement Responsibilities", "multiline": true, "rows": 4 },
+      { "key": "effectiveDate", "label": "Effective Date", "type": "date" },
+      { "key": "expirationDate", "label": "Expiration Date", "type": "date" }
+    ],
+    "defaultValues": {
+      "landlordName": "Acme Properties LLC",
+      "tenantName": "Northstar Retail Co.",
+      "leasedPremises": "Suite 400, 123 Market Street, Austin, Texas",
+      "addendumPurpose": "The parties agree to add storage access, adjust certain maintenance responsibilities, and update rent terms for the leased premises.",
+      "rentAdjustment": "Base rent increases by $750 per month beginning on the effective date.",
+      "improvementResponsibilities": "Tenant is responsible for approved interior shelving. Landlord is responsible for base building electrical and HVAC access.",
+      "effectiveDate": "2026-08-18",
+      "expirationDate": "2027-08-17"
+    },
+    "seo": {
+      "coversHeading": "What This Commercial Lease Addendum Covers",
+      "coversIntro": "This template helps landlords and tenants document changes to an existing commercial lease.",
+      "cards": [
+        { "title": "Leased Premises", "body": "Identifies the property or unit affected by the addendum." },
+        { "title": "Addendum Purpose", "body": "Explains what part of the lease is being added, changed, or clarified." },
+        { "title": "Rent Adjustment", "body": "Documents any rent increase, credit, concession, or payment change." },
+        { "title": "Improvement Responsibilities", "body": "Clarifies which party handles build-out, repairs, improvements, or maintenance." }
+      ],
+      "whenHeading": "When To Use This Template",
+      "whenBody": "Use this template when a landlord and commercial tenant need to change lease terms without rewriting the full lease.",
+      "faqs": [
+        { "question": "What is a commercial lease addendum?", "answer": "It is a document that adds to or changes an existing commercial lease while leaving the rest of the lease in effect." },
+        { "question": "Does an addendum replace the full lease?", "answer": "Usually no. It modifies only the terms stated in the addendum." },
+        { "question": "Should both landlord and tenant sign it?", "answer": "Yes. Both parties should sign the addendum for it to be enforceable." }
+      ]
+    }
+  },
+  {
+    "path": "/templates/unilateral-nda-template",
+    "title": "Unilateral One-Way NDA Template | Free PDF",
+    "metaDescription": "Generate a free unilateral one-way NDA PDF with confidential information description, permitted purpose, non-disclosure duration, and return or destruction terms.",
+    "h1": "Unilateral One-Way NDA Template",
+    "intro": "Create a one-way NDA for sharing confidential information with a recipient who must keep it private and use it only for a defined purpose.",
+    "contractTitle": "Unilateral One-Way NDA",
+    "planName": "One-way confidentiality",
+    "templateType": "nda",
+    "providerNameKey": "disclosingPartyName",
+    "clientNameKey": "receivingPartyName",
+    "scopeKey": "permittedPurpose",
+    "feeKey": "nonDisclosureDuration",
+    "dateKey": "startDate",
+    "termMonths": 36,
+    "fields": [
+      { "key": "disclosingPartyName", "label": "Disclosing Party Name" },
+      { "key": "receivingPartyName", "label": "Receiving Party Name" },
+      { "key": "confidentialInformationDescription", "label": "Confidential Information Description", "multiline": true, "rows": 4 },
+      { "key": "permittedPurpose", "label": "Permitted Purpose", "multiline": true, "rows": 4 },
+      { "key": "nonDisclosureDuration", "label": "Non-Disclosure Duration" },
+      { "key": "returnOrDestructionTerms", "label": "Return or Destruction Terms", "multiline": true, "rows": 3 },
+      { "key": "startDate", "label": "Effective Date", "type": "date" }
+    ],
+    "defaultValues": {
+      "disclosingPartyName": "Acme Growth LLC",
+      "receivingPartyName": "Northstar Evaluation Partner",
+      "confidentialInformationDescription": "Business plans, customer lists, pricing, product roadmaps, financial information, technical documentation, and non-public strategy materials.",
+      "permittedPurpose": "Receiving Party may use confidential information only to evaluate a potential business relationship with Disclosing Party.",
+      "nonDisclosureDuration": "3 years after disclosure, with trade secrets protected as long as they remain trade secrets.",
+      "returnOrDestructionTerms": "Upon request, Receiving Party will return or destroy confidential information except archival copies kept for legal or backup purposes.",
+      "startDate": "2026-08-18"
+    },
+    "seo": {
+      "coversHeading": "What This One-Way NDA Covers",
+      "coversIntro": "This unilateral NDA template protects confidential information shared by one party with another party for a limited purpose.",
+      "cards": [
+        { "title": "Confidential Information", "body": "Defines what business, technical, customer, financial, or strategy information is protected." },
+        { "title": "Permitted Purpose", "body": "Limits how the receiving party may use the confidential information." },
+        { "title": "Non-Disclosure Duration", "body": "Sets how long confidentiality obligations last." },
+        { "title": "Return or Destruction", "body": "Explains what happens to confidential materials when the relationship ends." }
+      ],
+      "whenHeading": "When To Use This Template",
+      "whenBody": "Use this template before sharing confidential information with a contractor, buyer, vendor, investor, candidate, or potential partner.",
+      "faqs": [
+        { "question": "What is a unilateral NDA?", "answer": "It is a one-way confidentiality agreement where only the receiving party has confidentiality obligations." },
+        { "question": "When is a one-way NDA better than a mutual NDA?", "answer": "A one-way NDA is usually better when only one party is disclosing sensitive information." },
+        { "question": "Does this protect trade secrets?", "answer": "The template includes language preserving trade secret protection while the information remains a trade secret." }
+      ]
+    }
+  },
+  {
+    "path": "/templates/software-dev-scope-of-work",
+    "title": "Software Development Scope of Work Template | Free PDF",
+    "metaDescription": "Generate a free software development scope of work PDF with project scope, milestones, acceptance criteria, project fee, and intellectual property terms.",
+    "h1": "Software Development Scope of Work Template",
+    "intro": "Create a software development SOW for custom builds, web apps, integrations, feature work, milestones, acceptance, and IP transfer terms.",
+    "contractTitle": "Software Development Scope of Work",
+    "planName": "Software development project",
+    "providerNameKey": "developerName",
+    "clientNameKey": "clientName",
+    "scopeKey": "projectScope",
+    "feeKey": "projectFee",
+    "dateKey": "startDate",
+    "termMonths": 6,
+    "fields": [
+      { "key": "clientName", "label": "Client Name" },
+      { "key": "developerName", "label": "Developer Name" },
+      { "key": "projectFee", "label": "Project Fee" },
+      { "key": "projectScope", "label": "Project Scope", "multiline": true, "rows": 4 },
+      { "key": "milestones", "label": "Milestones", "multiline": true, "rows": 4 },
+      { "key": "acceptanceCriteria", "label": "Acceptance Criteria", "multiline": true, "rows": 4 },
+      { "key": "intellectualPropertyTerms", "label": "Intellectual Property Terms", "multiline": true, "rows": 4 },
+      { "key": "startDate", "label": "Start Date", "type": "date" }
+    ],
+    "defaultValues": {
+      "clientName": "Acme Growth LLC",
+      "developerName": "Northstar Software Studio",
+      "projectFee": "$18,000 project fee",
+      "projectScope": "Developer will build a customer portal, authentication flow, dashboard, admin settings, API integration, and deployment support.",
+      "milestones": "Milestone 1: discovery and wireframes. Milestone 2: core build. Milestone 3: QA and launch support.",
+      "acceptanceCriteria": "Deliverables are accepted when they materially conform to the approved scope and pass mutually agreed test cases.",
+      "intellectualPropertyTerms": "Upon full payment, Client owns custom deliverables created specifically for the project. Developer retains reusable code, frameworks, tools, and know-how.",
+      "startDate": "2026-08-18"
+    },
+    "seo": {
+      "coversHeading": "What This Software Development SOW Covers",
+      "coversIntro": "This template defines the practical project terms for custom software development work.",
+      "cards": [
+        { "title": "Project Scope", "body": "Defines features, integrations, technical work, and deliverables included in the build." },
+        { "title": "Milestones", "body": "Breaks the project into phases for progress tracking and payment." },
+        { "title": "Acceptance Criteria", "body": "Sets how completed work is reviewed and accepted." },
+        { "title": "Intellectual Property", "body": "Explains ownership of custom deliverables and retained developer tools." }
+      ],
+      "whenHeading": "When To Use This Template",
+      "whenBody": "Use this template when defining a custom software project under a master services agreement or standalone development deal.",
+      "faqs": [
+        { "question": "What is a software development SOW?", "answer": "It is a scope document that defines software deliverables, milestones, fees, acceptance criteria, and project responsibilities." },
+        { "question": "Should acceptance criteria be specific?", "answer": "Yes. Specific acceptance criteria reduce disputes over whether software work is complete." },
+        { "question": "Does this replace a master services agreement?", "answer": "It can be used alone for simple projects, but many teams attach it to a broader MSA." }
+      ]
+    }
+  },
+  {
+    "path": "/templates/construction-lien-waiver",
+    "title": "Construction Lien Waiver Template | Free PDF",
+    "metaDescription": "Generate a free construction lien waiver PDF with property owner, contractor, project address, payment amount, waiver type, and covered work period.",
+    "h1": "Construction Lien Waiver Template",
+    "intro": "Create a construction lien waiver for contractors, subcontractors, owners, and project participants documenting payment and lien release terms.",
+    "contractTitle": "Construction Lien Waiver",
+    "planName": "Construction lien release",
+    "providerNameKey": "contractorName",
+    "clientNameKey": "propertyOwnerName",
+    "scopeKey": "coveredWorkPeriod",
+    "feeKey": "paymentAmount",
+    "dateKey": "effectiveDate",
+    "termMonths": 1,
+    "fields": [
+      { "key": "propertyOwnerName", "label": "Property Owner Name" },
+      { "key": "contractorName", "label": "Contractor Name" },
+      { "key": "projectAddress", "label": "Project Address" },
+      { "key": "paymentAmount", "label": "Payment Amount" },
+      { "key": "waiverType", "label": "Waiver Type" },
+      { "key": "coveredWorkPeriod", "label": "Covered Work Period" },
+      { "key": "lienReleaseConditions", "label": "Lien Release Conditions", "multiline": true, "rows": 4 },
+      { "key": "effectiveDate", "label": "Effective Date", "type": "date" }
+    ],
+    "defaultValues": {
+      "propertyOwnerName": "Acme Property Holdings LLC",
+      "contractorName": "Northstar Construction Services",
+      "projectAddress": "123 Market Street, Austin, Texas",
+      "paymentAmount": "$25,000",
+      "waiverType": "Conditional waiver upon receipt and clearance of payment",
+      "coveredWorkPeriod": "Work performed through August 18, 2026",
+      "lienReleaseConditions": "The waiver becomes effective only after Contractor receives and the bank clears the stated payment amount for the covered work period.",
+      "effectiveDate": "2026-08-18"
+    },
+    "seo": {
+      "coversHeading": "What This Construction Lien Waiver Covers",
+      "coversIntro": "This template documents payment-related lien waiver terms for a specific project, amount, and work period.",
+      "cards": [
+        { "title": "Payment Amount", "body": "States the payment amount connected to the lien waiver." },
+        { "title": "Waiver Type", "body": "Identifies whether the waiver is conditional, unconditional, progress, or final." },
+        { "title": "Covered Work Period", "body": "Defines the labor, materials, or period covered by the waiver." },
+        { "title": "Release Conditions", "body": "Clarifies when the waiver becomes effective and what payment conditions apply." }
+      ],
+      "whenHeading": "When To Use This Template",
+      "whenBody": "Use this template when documenting lien waiver terms for a construction payment, draw, progress payment, or final payment.",
+      "faqs": [
+        { "question": "What is a construction lien waiver?", "answer": "It is a document where a contractor or project participant waives lien rights for specified work or payment." },
+        { "question": "What is the difference between conditional and unconditional waivers?", "answer": "A conditional waiver depends on payment clearing, while an unconditional waiver is effective regardless of whether payment later fails." },
+        { "question": "Should lien waivers follow state law?", "answer": "Yes. Construction lien waiver requirements vary by state and should be reviewed before use." }
+      ]
+    }
+  },
+  {
+    "path": "/templates/hvac-subcontractor-agreement",
+    "title": "HVAC Subcontractor Agreement Template | Free PDF",
+    "metaDescription": "Generate a free HVAC subcontractor agreement PDF with HVAC scope, payment terms, materials responsibility, permits, warranty period, and schedule duties.",
+    "h1": "HVAC Subcontractor Agreement Template",
+    "intro": "Create an HVAC subcontractor agreement for general contractors, builders, property managers, and HVAC trade subcontractors.",
+    "contractTitle": "HVAC Subcontractor Agreement",
+    "planName": "HVAC subcontracted services",
+    "providerNameKey": "hvacSubcontractorName",
+    "clientNameKey": "generalContractorName",
+    "scopeKey": "hvacScope",
+    "feeKey": "paymentTerms",
+    "dateKey": "startDate",
+    "termMonths": 6,
+    "fields": [
+      { "key": "generalContractorName", "label": "General Contractor Name" },
+      { "key": "hvacSubcontractorName", "label": "HVAC Subcontractor Name" },
+      { "key": "paymentTerms", "label": "Payment Terms" },
+      { "key": "hvacScope", "label": "HVAC Scope", "multiline": true, "rows": 4 },
+      { "key": "materialsResponsibility", "label": "Materials Responsibility", "multiline": true, "rows": 3 },
+      { "key": "permitRequirements", "label": "Permit Requirements", "multiline": true, "rows": 3 },
+      { "key": "warrantyPeriod", "label": "Warranty Period" },
+      { "key": "startDate", "label": "Start Date", "type": "date" }
+    ],
+    "defaultValues": {
+      "generalContractorName": "Acme Builders LLC",
+      "hvacSubcontractorName": "Northstar HVAC Services",
+      "paymentTerms": "$42,000 fixed fee paid by approved progress draws",
+      "hvacScope": "HVAC Subcontractor will provide ductwork, equipment installation, startup support, testing, balancing coordination, and punch list correction for the project.",
+      "materialsResponsibility": "Subcontractor supplies standard HVAC materials unless equipment, specialty controls, or owner-furnished items are listed separately.",
+      "permitRequirements": "Subcontractor will maintain required trade licenses and assist with permit inspections applicable to HVAC work.",
+      "warrantyPeriod": "One year from substantial completion for workmanship, excluding misuse, owner changes, or manufacturer defects.",
+      "startDate": "2026-08-18"
+    },
+    "seo": {
+      "coversHeading": "What This HVAC Subcontractor Agreement Covers",
+      "coversIntro": "This template defines HVAC subcontractor scope, payment, material responsibility, permits, warranties, and project coordination.",
+      "cards": [
+        { "title": "HVAC Scope", "body": "Documents equipment, ductwork, startup, testing, balancing, and punch list work." },
+        { "title": "Payment Terms", "body": "Sets fixed-fee, draw, milestone, or progress payment rules." },
+        { "title": "Materials Responsibility", "body": "Clarifies who supplies equipment, parts, controls, and other project materials." },
+        { "title": "Warranty Period", "body": "States workmanship warranty timing and exclusions." }
+      ],
+      "whenHeading": "When To Use This Template",
+      "whenBody": "Use this template when a general contractor or builder hires an HVAC subcontractor for project work.",
+      "faqs": [
+        { "question": "What should an HVAC subcontractor agreement include?", "answer": "It should include HVAC scope, payment, materials, permits, schedule, warranty, insurance, and safety requirements." },
+        { "question": "Who should handle permits?", "answer": "That depends on the project. This template includes a permit requirements field so responsibilities can be stated clearly." },
+        { "question": "Can this be used for residential and commercial HVAC?", "answer": "Yes. Adjust the scope, warranty, and permit language to match the project." }
+      ]
+    }
+  },
+  {
+    "path": "/templates/photography-licensing-agreement",
+    "title": "Photography Licensing Agreement Template | Free PDF",
+    "metaDescription": "Generate a free photography licensing agreement PDF with license fee, image description, permitted uses, license term, territory, and usage restrictions.",
+    "h1": "Photography Licensing Agreement Template",
+    "intro": "Create a photography license agreement for photographers and clients defining image usage, fees, territory, duration, and restrictions.",
+    "contractTitle": "Photography Licensing Agreement",
+    "planName": "Photography image license",
+    "providerNameKey": "licensorName",
+    "clientNameKey": "licenseeName",
+    "scopeKey": "permittedUses",
+    "feeKey": "licenseFee",
+    "dateKey": "startDate",
+    "termMonths": 12,
+    "fields": [
+      { "key": "licensorName", "label": "Photographer or Licensor Name" },
+      { "key": "licenseeName", "label": "Client or Licensee Name" },
+      { "key": "licenseFee", "label": "License Fee" },
+      { "key": "imageDescription", "label": "Image Description", "multiline": true, "rows": 3 },
+      { "key": "permittedUses", "label": "Permitted Uses", "multiline": true, "rows": 4 },
+      { "key": "licenseTerm", "label": "License Term" },
+      { "key": "territory", "label": "Territory" },
+      { "key": "startDate", "label": "Start Date", "type": "date" }
+    ],
+    "defaultValues": {
+      "licensorName": "Bright Frame Photography",
+      "licenseeName": "Acme Growth LLC",
+      "licenseFee": "$1,200 license fee",
+      "imageDescription": "A curated set of 30 edited product and lifestyle images delivered from the August campaign shoot.",
+      "permittedUses": "Licensee may use the images in owned social media, website pages, paid digital ads, email campaigns, and sales presentations.",
+      "licenseTerm": "12 months from the start date",
+      "territory": "Worldwide digital use",
+      "startDate": "2026-08-18"
+    },
+    "seo": {
+      "coversHeading": "What This Photography Licensing Agreement Covers",
+      "coversIntro": "This template helps photographers and clients document image usage rights without transferring full copyright unless agreed.",
+      "cards": [
+        { "title": "License Fee", "body": "Documents the price paid for image usage rights." },
+        { "title": "Permitted Uses", "body": "Defines where the client may use the images." },
+        { "title": "License Term", "body": "States how long the usage license lasts." },
+        { "title": "Territory", "body": "Clarifies whether use is local, national, worldwide, digital-only, or channel-specific." }
+      ],
+      "whenHeading": "When To Use This Template",
+      "whenBody": "Use this template when licensing photography for marketing, advertising, editorial, website, product, or brand use.",
+      "faqs": [
+        { "question": "What is a photography licensing agreement?", "answer": "It is a contract that gives a client permission to use photos under stated terms while the photographer may retain copyright." },
+        { "question": "Does a photo license transfer ownership?", "answer": "Usually no. A license grants usage rights, while copyright transfer requires specific assignment language." },
+        { "question": "Why define permitted uses?", "answer": "Permitted uses prevent confusion about whether images can be used in ads, print, social media, email, or resale." }
+      ]
+    }
+  },
+  {
+    "path": "/templates/virtual-assistant-contract",
+    "title": "Virtual Assistant Service Agreement Template | Free PDF",
+    "metaDescription": "Generate a free virtual assistant service agreement PDF with monthly fee, services included, weekly hours, communication channels, and confidentiality terms.",
+    "h1": "Virtual Assistant Service Agreement Template",
+    "intro": "Create a virtual assistant agreement for administrative support, inbox management, scheduling, research, customer support, and operational tasks.",
+    "contractTitle": "Virtual Assistant Service Agreement",
+    "planName": "Virtual assistant services",
+    "providerNameKey": "assistantName",
+    "clientNameKey": "clientName",
+    "scopeKey": "servicesIncluded",
+    "feeKey": "monthlyFee",
+    "dateKey": "startDate",
+    "termMonths": 3,
+    "fields": [
+      { "key": "clientName", "label": "Client Name" },
+      { "key": "assistantName", "label": "Virtual Assistant Name" },
+      { "key": "monthlyFee", "label": "Monthly Fee" },
+      { "key": "servicesIncluded", "label": "Services Included", "multiline": true, "rows": 4 },
+      { "key": "weeklyHours", "label": "Weekly Hours" },
+      { "key": "communicationChannels", "label": "Communication Channels" },
+      { "key": "confidentialityTerms", "label": "Confidentiality Terms", "multiline": true, "rows": 4 },
+      { "key": "startDate", "label": "Start Date", "type": "date" }
+    ],
+    "defaultValues": {
+      "clientName": "Acme Growth LLC",
+      "assistantName": "Northstar VA Services",
+      "monthlyFee": "$1,600 per month",
+      "servicesIncluded": "Inbox triage, calendar scheduling, CRM updates, meeting notes, vendor coordination, light research, and recurring admin tasks.",
+      "weeklyHours": "Up to 20 hours per week",
+      "communicationChannels": "Slack, email, shared task board, and weekly check-in call.",
+      "confidentialityTerms": "Assistant will protect client information, passwords, customer data, documents, pricing, and business processes.",
+      "startDate": "2026-08-18"
+    },
+    "seo": {
+      "coversHeading": "What This Virtual Assistant Agreement Covers",
+      "coversIntro": "This template defines the support scope, hours, communication norms, fees, and confidentiality terms for virtual assistant work.",
+      "cards": [
+        { "title": "Monthly Fee", "body": "Sets the recurring fee for virtual assistant support." },
+        { "title": "Services Included", "body": "Lists administrative, operational, inbox, calendar, CRM, or support tasks included." },
+        { "title": "Weekly Hours", "body": "Defines available capacity and helps avoid scope creep." },
+        { "title": "Confidentiality", "body": "Protects client information, account access, passwords, and customer data." }
+      ],
+      "whenHeading": "When To Use This Template",
+      "whenBody": "Use this template when hiring a virtual assistant, executive assistant, admin contractor, or operations support provider.",
+      "faqs": [
+        { "question": "What is a virtual assistant service agreement?", "answer": "It is a contract that defines VA services, fees, hours, communication, confidentiality, and termination terms." },
+        { "question": "Should a VA agreement include confidentiality?", "answer": "Yes. Virtual assistants often access inboxes, calendars, customer data, passwords, and internal systems." },
+        { "question": "Can this template be used for hourly VA work?", "answer": "Yes. Replace the monthly fee with hourly billing terms." }
+      ]
+    }
+  },
+  {
+    "path": "/templates/webflow-development-retainer",
+    "title": "Webflow Development Retainer Template | Free PDF",
+    "metaDescription": "Generate a free Webflow development retainer PDF with monthly retainer, Webflow scope, support hours, response time, hosting responsibility, and change request terms.",
+    "h1": "Webflow Development Retainer Template",
+    "intro": "Create a Webflow retainer agreement for website updates, landing pages, CMS support, design implementation, and ongoing maintenance.",
+    "contractTitle": "Webflow Development Retainer",
+    "planName": "Webflow development retainer",
+    "providerNameKey": "developerName",
+    "clientNameKey": "clientName",
+    "scopeKey": "webflowScope",
+    "feeKey": "monthlyRetainer",
+    "dateKey": "startDate",
+    "termMonths": 6,
+    "fields": [
+      { "key": "clientName", "label": "Client Name" },
+      { "key": "developerName", "label": "Webflow Developer Name" },
+      { "key": "monthlyRetainer", "label": "Monthly Retainer" },
+      { "key": "webflowScope", "label": "Webflow Scope", "multiline": true, "rows": 4 },
+      { "key": "supportHours", "label": "Support Hours" },
+      { "key": "responseTime", "label": "Response Time" },
+      { "key": "hostingResponsibility", "label": "Hosting Responsibility", "multiline": true, "rows": 3 },
+      { "key": "startDate", "label": "Start Date", "type": "date" }
+    ],
+    "defaultValues": {
+      "clientName": "Acme Growth LLC",
+      "developerName": "Northstar Webflow Studio",
+      "monthlyRetainer": "$2,500 per month",
+      "webflowScope": "Developer will provide Webflow page updates, CMS collection updates, responsive fixes, landing page builds, QA, and light technical support.",
+      "supportHours": "Up to 15 support hours per month",
+      "responseTime": "One business day response for standard requests.",
+      "hostingResponsibility": "Client remains responsible for Webflow hosting, workspace fees, domain renewals, third-party tools, and paid integrations.",
+      "startDate": "2026-08-18"
+    },
+    "seo": {
+      "coversHeading": "What This Webflow Development Retainer Covers",
+      "coversIntro": "This template defines recurring Webflow support, support hours, hosting responsibilities, and change request handling.",
+      "cards": [
+        { "title": "Monthly Retainer", "body": "Documents the recurring Webflow support fee." },
+        { "title": "Webflow Scope", "body": "Lists included page builds, CMS updates, fixes, and development support." },
+        { "title": "Support Hours", "body": "Sets included monthly capacity and makes overages easier to manage." },
+        { "title": "Hosting Responsibility", "body": "Clarifies who pays for Webflow hosting, domains, workspaces, and third-party tools." }
+      ],
+      "whenHeading": "When To Use This Template",
+      "whenBody": "Use this template when a Webflow developer or studio provides recurring site updates, support, and page development.",
+      "faqs": [
+        { "question": "What is a Webflow development retainer?", "answer": "It is a recurring agreement for Webflow support, updates, page builds, CMS work, and maintenance." },
+        { "question": "Should hosting fees be separate?", "answer": "Usually yes. Clients often pay Webflow and domain fees directly while the developer charges for services." },
+        { "question": "Can this template cover landing pages?", "answer": "Yes. Add landing page builds and turnaround expectations to the Webflow scope field." }
+      ]
+    }
+  },
+  {
+    "path": "/templates/consultant-advisory-agreement",
+    "title": "Consultant Advisory Agreement Template | Free PDF",
+    "metaDescription": "Generate a free consultant advisory agreement PDF with advisory fee, scope, meeting cadence, deliverables, conflicts of interest, and confidentiality terms.",
+    "h1": "Consultant Advisory Agreement Template",
+    "intro": "Create a consultant advisory agreement for strategic advisors, fractional executives, expert consultants, mentors, and business advisors.",
+    "contractTitle": "Consultant Advisory Agreement",
+    "planName": "Consultant advisory services",
+    "providerNameKey": "consultantName",
+    "clientNameKey": "clientName",
+    "scopeKey": "advisoryScope",
+    "feeKey": "advisoryFee",
+    "dateKey": "startDate",
+    "termMonths": 6,
+    "fields": [
+      { "key": "clientName", "label": "Client Name" },
+      { "key": "consultantName", "label": "Consultant Name" },
+      { "key": "advisoryFee", "label": "Advisory Fee" },
+      { "key": "advisoryScope", "label": "Advisory Scope", "multiline": true, "rows": 4 },
+      { "key": "meetingCadence", "label": "Meeting Cadence" },
+      { "key": "deliverables", "label": "Deliverables", "multiline": true, "rows": 4 },
+      { "key": "conflictOfInterestTerms", "label": "Conflict of Interest Terms", "multiline": true, "rows": 4 },
+      { "key": "startDate", "label": "Start Date", "type": "date" }
+    ],
+    "defaultValues": {
+      "clientName": "Acme Growth LLC",
+      "consultantName": "Northstar Advisory Group",
+      "advisoryFee": "$4,000 per month",
+      "advisoryScope": "Consultant will advise on go-to-market strategy, pricing, partnerships, operating cadence, leadership decisions, and growth planning.",
+      "meetingCadence": "Two advisory calls per month plus asynchronous feedback by email or Slack.",
+      "deliverables": "Monthly advisory memo, strategic recommendations, meeting notes, and feedback on selected plans or materials.",
+      "conflictOfInterestTerms": "Consultant will disclose material conflicts and will not use Client confidential information for another client or competing opportunity.",
+      "startDate": "2026-08-18"
+    },
+    "seo": {
+      "coversHeading": "What This Consultant Advisory Agreement Covers",
+      "coversIntro": "This template defines advisory scope, fees, meeting cadence, deliverables, confidentiality, and conflict of interest rules.",
+      "cards": [
+        { "title": "Advisory Fee", "body": "Sets monthly, hourly, equity, or project-based advisory compensation." },
+        { "title": "Advisory Scope", "body": "Defines what strategic, operational, technical, or executive guidance the consultant provides." },
+        { "title": "Meeting Cadence", "body": "Documents call frequency, async support, and expected access to the advisor." },
+        { "title": "Conflict Terms", "body": "Requires disclosure of conflicts and restricts misuse of client confidential information." }
+      ],
+      "whenHeading": "When To Use This Template",
+      "whenBody": "Use this template when retaining a strategic advisor, consultant, fractional executive, mentor, or expert advisor.",
+      "faqs": [
+        { "question": "What is a consultant advisory agreement?", "answer": "It is a contract that defines advisory services, compensation, meeting cadence, deliverables, confidentiality, and conflict rules." },
+        { "question": "Can advisory compensation include equity?", "answer": "Yes, but equity terms should be stated clearly and usually require separate company approval and equity documents." },
+        { "question": "Is an advisor responsible for business results?", "answer": "Usually advisors provide recommendations and guidance, not guaranteed business outcomes." }
+      ]
+    }
+  }
+]
