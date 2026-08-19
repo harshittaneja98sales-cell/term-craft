@@ -271,6 +271,7 @@ function renderPublicHeaderStatic() {
         <a href="/templates">Template Hub</a>
         <a href="/builder">Contract Studio</a>
         <a href="/dashboard">Vault</a>
+        <a href="/billing">Billing</a>
         <a href="/privacy">Privacy</a>
         <a class="button primary" href="/builder" style="margin-left: 6px;">New Contract</a>
       </nav>
@@ -298,6 +299,7 @@ function renderPublicFooterStatic() {
           <a href="/templates">Template directory</a>
           <a href="/builder">Contract Studio</a>
           <a href="/dashboard">Document Vault</a>
+          <a href="/billing">Billing</a>
           <a href="/privacy">Privacy Policy</a>
         </nav>
       </div>
@@ -784,6 +786,7 @@ const robots = `User-agent: *
 Allow: /
 Disallow: /admin
 Disallow: /dashboard
+Disallow: /billing
 Disallow: /login
 
 Sitemap: ${sitemapBaseUrl}/sitemap.xml

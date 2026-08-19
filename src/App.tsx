@@ -188,6 +188,24 @@ type DocumentStorageInfo = {
   durable: boolean;
 };
 
+type BillingConfig = {
+  checkoutEnabled: boolean;
+  portalEnabled: boolean;
+  webhookEnabled: boolean;
+  mode: "test" | "live";
+};
+
+type BillingStatus = {
+  plan: "free" | "pro" | string;
+  status: string;
+  priceId: string;
+  stripeCustomerId: string;
+  stripeSubscriptionId: string;
+  currentPeriodEnd: string;
+  cancelAtPeriodEnd: boolean;
+  trialEnd: string;
+};
+
 type VaultDocument = {
   id: string;
   userId: string;
@@ -804,6 +822,51 @@ async function fetchVaultDocuments(session: AuthSession) {
   }>;
 }
 
+async function fetchBillingStatus(session: AuthSession) {
+  const response = await fetch("/api/billing/status", {
+    headers: createAuthHeaders(session),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Could not load billing."));
+  }
+
+  return response.json() as Promise<{
+    billing: BillingStatus;
+    config: BillingConfig;
+  }>;
+}
+
+async function createCheckoutSession(session: AuthSession) {
+  const response = await fetch("/api/billing/checkout", {
+    headers: createAuthHeaders(session),
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Could not start Checkout."));
+  }
+
+  return response.json() as Promise<{ url: string }>;
+}
+
+async function createPortalSession(
+  session: AuthSession,
+  returnPath = "/dashboard",
+) {
+  const response = await fetch("/api/billing/portal", {
+    body: JSON.stringify({ returnPath }),
+    headers: createAuthHeaders(session),
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Could not open billing."));
+  }
+
+  return response.json() as Promise<{ url: string }>;
+}
+
 async function saveVaultDocument(
   session: AuthSession,
   payload: SaveVaultDocumentPayload,
@@ -868,6 +931,35 @@ function openDocumentInStudio(document: VaultDocument) {
 
 function createVaultDocumentTitle(contract: ContractState) {
   return `${contract.contractTitle} - ${contract.customerName || "Client"}`;
+}
+
+function isPaidBillingStatus(billing: BillingStatus | null) {
+  return billing?.plan === "pro" && ["active", "trialing"].includes(billing.status);
+}
+
+async function redirectToCheckout(session: AuthSession | null) {
+  const activeSession = session ?? (await getUsableAuthSession());
+  if (!activeSession) {
+    window.location.href = getLoginUrl("/billing");
+    return;
+  }
+
+  const checkout = await createCheckoutSession(activeSession);
+  window.location.href = checkout.url;
+}
+
+async function redirectToBillingPortal(
+  session: AuthSession | null,
+  returnPath = "/dashboard",
+) {
+  const activeSession = session ?? (await getUsableAuthSession());
+  if (!activeSession) {
+    window.location.href = getLoginUrl(returnPath);
+    return;
+  }
+
+  const portal = await createPortalSession(activeSession, returnPath);
+  window.location.href = portal.url;
 }
 
 function formatDate(value: string) {
@@ -2711,6 +2803,7 @@ function PublicHeader() {
         <a className={currentPath.startsWith("/templates") ? "active" : ""} href="/templates">Template Hub</a>
         <a className={currentPath === "/builder" ? "active" : ""} href="/builder">Contract Studio</a>
         <a className={currentPath === "/dashboard" ? "active" : ""} href="/dashboard">Vault</a>
+        <a className={currentPath === "/billing" ? "active" : ""} href="/billing">Billing</a>
         <a className={currentPath === "/privacy" ? "active" : ""} href="/privacy">Privacy</a>
         <a className="button primary" href="/builder">
           <Wand2 size={16} />
@@ -2750,6 +2843,7 @@ function PublicFooter() {
           <a href="/templates">Template directory</a>
           <a href="/builder">Contract Studio</a>
           <a href="/dashboard">Document Vault</a>
+          <a href="/billing">Billing</a>
           <a href="/privacy">Privacy Policy</a>
         </nav>
       </div>
@@ -3161,6 +3255,180 @@ function getHighIntentTemplates() {
     .filter(Boolean);
 }
 
+function BillingPage() {
+  const [session, setSession] = useState<AuthSession | null>(
+    () => readStoredAuthSession(),
+  );
+  const [billing, setBilling] = useState<BillingStatus | null>(null);
+  const [config, setConfig] = useState<BillingConfig | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRedirecting, setIsRedirecting] = useState(false);
+  const [error, setError] = useState("");
+
+  usePageMetadata({
+    canonicalPath: "/billing",
+    title: "Pricing & Billing | Term Craft",
+    description:
+      "Term Craft test billing page for upgrading to a paid SaaS plan.",
+  });
+  useRobotsMeta("noindex,nofollow");
+
+  async function loadBillingPage() {
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const configResponse = await fetch("/api/billing/config");
+      const stripeConfig = configResponse.ok
+        ? ((await configResponse.json()) as BillingConfig)
+        : null;
+      setConfig(stripeConfig);
+
+      const activeSession = await getUsableAuthSession();
+      setSession(activeSession);
+
+      if (activeSession) {
+        const data = await fetchBillingStatus(activeSession);
+        setBilling(data.billing);
+        setConfig(data.config);
+      }
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not load billing.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function startCheckout() {
+    setError("");
+    setIsRedirecting(true);
+
+    try {
+      await redirectToCheckout(session);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not start Checkout.",
+      );
+      setIsRedirecting(false);
+    }
+  }
+
+  async function openPortal() {
+    setError("");
+    setIsRedirecting(true);
+
+    try {
+      await redirectToBillingPortal(session, "/dashboard");
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not open billing portal.",
+      );
+      setIsRedirecting(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadBillingPage();
+  }, []);
+
+  const hasPaidPlan = isPaidBillingStatus(billing);
+  const checkoutEnabled = Boolean(config?.checkoutEnabled);
+
+  return (
+    <div className="public-page">
+      <PublicHeader />
+      <main className="billing-page">
+        <section className="billing-header">
+          <div>
+            <div className="template-kicker">Test Billing</div>
+            <h1>Upgrade Term Craft</h1>
+            <p>
+              Test Stripe Checkout in subscription mode before we switch to live
+              billing. Checkout is hosted by Stripe; Term Craft stores only the
+              customer and subscription status.
+            </p>
+          </div>
+          <StatusPill status={config?.mode === "live" ? "Live mode" : "Test mode"} />
+        </section>
+
+        {error ? <div className="admin-alert">{error}</div> : null}
+        {!checkoutEnabled && !isLoading ? (
+          <div className="admin-alert">
+            Stripe test billing is not fully configured yet. Add
+            `STRIPE_SECRET_KEY` and `STRIPE_PRICE_ID` in Render, then redeploy.
+          </div>
+        ) : null}
+
+        <section className="pricing-grid">
+          <article className="pricing-card">
+            <div>
+              <h2>Free</h2>
+              <p>Template discovery, form-filled drafts, and PDF downloads.</p>
+            </div>
+            <strong>$0</strong>
+            <ul>
+              <li>SEO template pages</li>
+              <li>Instant PDF generation</li>
+              <li>Browser-local studio drafts</li>
+            </ul>
+            <a className="button secondary full-width" href="/templates">
+              Browse Templates
+            </a>
+          </article>
+
+          <article className="pricing-card featured">
+            <div>
+              <h2>Pro</h2>
+              <p>Account vault and paid SaaS workflow foundation.</p>
+            </div>
+            <strong>Test price</strong>
+            <ul>
+              <li>Private document vault</li>
+              <li>Saved drafts across devices</li>
+              <li>Billing portal for subscription management</li>
+            </ul>
+            {hasPaidPlan ? (
+              <button
+                className="button primary full-width"
+                disabled={isRedirecting}
+                type="button"
+                onClick={openPortal}
+              >
+                <BadgeDollarSign size={17} />
+                <span>{isRedirecting ? "Opening..." : "Manage Billing"}</span>
+              </button>
+            ) : session ? (
+              <button
+                className="button primary full-width"
+                disabled={!checkoutEnabled || isRedirecting}
+                type="button"
+                onClick={startCheckout}
+              >
+                <BadgeDollarSign size={17} />
+                <span>{isRedirecting ? "Opening..." : "Start Test Checkout"}</span>
+              </button>
+            ) : (
+              <a className="button primary full-width" href={getLoginUrl("/billing")}>
+                <KeyRound size={17} />
+                <span>Sign In to Upgrade</span>
+              </a>
+            )}
+          </article>
+        </section>
+      </main>
+      <PublicFooter />
+    </div>
+  );
+}
+
 function AuthPage() {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
@@ -3306,8 +3574,11 @@ function DashboardPage() {
   );
   const [documents, setDocuments] = useState<VaultDocument[]>([]);
   const [storage, setStorage] = useState<DocumentStorageInfo | null>(null);
+  const [billing, setBilling] = useState<BillingStatus | null>(null);
+  const [billingConfig, setBillingConfig] = useState<BillingConfig | null>(null);
   const [selectedId, setSelectedId] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isBillingRedirecting, setIsBillingRedirecting] = useState(false);
   const [error, setError] = useState("");
 
   const selectedDocument =
@@ -3337,10 +3608,15 @@ function DashboardPage() {
       saveStoredAuthSession(nextSession);
       setSession(nextSession);
 
-      const data = await fetchVaultDocuments(nextSession);
-      setDocuments(data.documents);
-      setStorage(data.storage);
-      setSelectedId((current) => current || data.documents[0]?.id || "");
+      const [vaultData, billingData] = await Promise.all([
+        fetchVaultDocuments(nextSession),
+        fetchBillingStatus(nextSession),
+      ]);
+      setDocuments(vaultData.documents);
+      setStorage(vaultData.storage);
+      setBilling(billingData.billing);
+      setBillingConfig(billingData.config);
+      setSelectedId((current) => current || vaultData.documents[0]?.id || "");
     } catch (requestError) {
       clearStoredAuthSession();
       setSession(null);
@@ -3358,7 +3634,40 @@ function DashboardPage() {
     await logoutAuthSession(session);
     setSession(null);
     setDocuments([]);
+    setBilling(null);
     setSelectedId("");
+  }
+
+  async function startDashboardCheckout() {
+    setIsBillingRedirecting(true);
+    setError("");
+
+    try {
+      await redirectToCheckout(session);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not start Checkout.",
+      );
+      setIsBillingRedirecting(false);
+    }
+  }
+
+  async function openDashboardPortal() {
+    setIsBillingRedirecting(true);
+    setError("");
+
+    try {
+      await redirectToBillingPortal(session, "/dashboard");
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not open billing portal.",
+      );
+      setIsBillingRedirecting(false);
+    }
   }
 
   async function removeDocument(documentId: string) {
@@ -3427,6 +3736,10 @@ function DashboardPage() {
               <FileText size={17} />
               <span>Templates</span>
             </a>
+            <a className="button secondary" href="/billing">
+              <BadgeDollarSign size={17} />
+              <span>Billing</span>
+            </a>
             <button className="button secondary" type="button" onClick={loadVault}>
               <RotateCcw size={17} />
               <span>Refresh</span>
@@ -3449,9 +3762,49 @@ function DashboardPage() {
             label="Storage"
             value={storage?.durable ? "Supabase" : storage ? "Local JSON" : "Checking"}
           />
+          <Metric
+            label="Plan"
+            value={isPaidBillingStatus(billing) ? "Pro" : "Free"}
+          />
         </section>
 
         {error ? <div className="admin-alert">{error}</div> : null}
+
+        <section className="billing-summary-panel">
+          <div>
+            <h2>{isPaidBillingStatus(billing) ? "Pro plan active" : "Free plan"}</h2>
+            <p>
+              {isPaidBillingStatus(billing)
+                ? billing?.cancelAtPeriodEnd
+                  ? `Access remains active until ${formatTimestamp(billing.currentPeriodEnd)}.`
+                  : `Subscription status: ${billing?.status || "active"}.`
+                : "Upgrade through Stripe test Checkout to verify the paid SaaS flow."}
+            </p>
+          </div>
+          <div className="vault-actions">
+            {isPaidBillingStatus(billing) ? (
+              <button
+                className="button secondary"
+                disabled={isBillingRedirecting}
+                type="button"
+                onClick={openDashboardPortal}
+              >
+                <BadgeDollarSign size={17} />
+                <span>{isBillingRedirecting ? "Opening..." : "Manage Billing"}</span>
+              </button>
+            ) : (
+              <button
+                className="button primary"
+                disabled={!billingConfig?.checkoutEnabled || isBillingRedirecting}
+                type="button"
+                onClick={startDashboardCheckout}
+              >
+                <BadgeDollarSign size={17} />
+                <span>{isBillingRedirecting ? "Opening..." : "Upgrade Test"}</span>
+              </button>
+            )}
+          </div>
+        </section>
 
         <section className="vault-layout">
           <aside className="vault-list-panel">
@@ -4882,6 +5235,7 @@ function ContractBuilderApp() {
           <a href="/">Home</a>
           <a href="/templates">Template Hub</a>
           <a href="/dashboard">Vault</a>
+          <a href="/billing">Billing</a>
           <a href="/admin/leads">Admin</a>
         </nav>
 
@@ -5747,6 +6101,10 @@ function App() {
 
   if (pathname === "/dashboard") {
     return <DashboardPage />;
+  }
+
+  if (pathname === "/billing") {
+    return <BillingPage />;
   }
 
   if (pathname === "/privacy") {

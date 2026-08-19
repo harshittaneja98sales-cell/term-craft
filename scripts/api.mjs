@@ -8,6 +8,13 @@ import {
   saveDocument,
 } from "./document-store.mjs";
 import {
+  createBillingPortalSession,
+  createSubscriptionCheckoutSession,
+  getBillingStatus,
+  getStripeConfigStatus,
+  handleStripeWebhook,
+} from "./stripe-service.mjs";
+import {
   getStorageInfo,
   leadsToCsv,
   readAnalyticsEvents,
@@ -453,6 +460,51 @@ export function registerApiRoutes(app) {
       }
 
       res.status(204).send();
+    } catch (error) {
+      sendApiError(res, error);
+    }
+  });
+
+  app.get("/api/billing/config", (_req, res) => {
+    res.json(getStripeConfigStatus());
+  });
+
+  app.get("/api/billing/status", async (req, res) => {
+    try {
+      const user = await authenticateRequest(req);
+      const billing = await getBillingStatus(user);
+      res.json({ billing, config: getStripeConfigStatus() });
+    } catch (error) {
+      sendApiError(res, error);
+    }
+  });
+
+  app.post("/api/billing/checkout", async (req, res) => {
+    try {
+      const user = await authenticateRequest(req);
+      const session = await createSubscriptionCheckoutSession(user);
+      res.status(201).json({ url: session.url });
+    } catch (error) {
+      sendApiError(res, error);
+    }
+  });
+
+  app.post("/api/billing/portal", async (req, res) => {
+    try {
+      const user = await authenticateRequest(req);
+      const returnPath = cleanString(req.body?.returnPath, 240);
+      const session = await createBillingPortalSession(user, returnPath);
+      res.status(201).json({ url: session.url });
+    } catch (error) {
+      sendApiError(res, error);
+    }
+  });
+
+  app.post("/api/webhooks/stripe", async (req, res) => {
+    try {
+      const signature = req.get("stripe-signature") ?? "";
+      const event = await handleStripeWebhook(req.rawBody ?? Buffer.from(""), signature);
+      res.json({ received: true, type: event.type });
     } catch (error) {
       sendApiError(res, error);
     }

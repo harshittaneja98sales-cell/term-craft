@@ -19,6 +19,9 @@ Use Render for the first launch because this app includes a Node/Express API for
   - `RESEND_API_KEY`
   - `EMAIL_FROM`
   - `EMAIL_REPLY_TO`
+  - `STRIPE_SECRET_KEY`
+  - `STRIPE_PRICE_ID`
+  - `STRIPE_WEBHOOK_SECRET`
 
 The included `render.yaml` defines these settings as a Render Blueprint.
 
@@ -39,6 +42,28 @@ The app can run without Supabase, but Render Free does not provide durable local
 Production admin routes require `ADMIN_API_KEY`. `SUPABASE_PUBLISHABLE_KEY` powers account signup/login. The service role key must stay server-side. Do not put it in frontend code or public docs.
 
 In Supabase > Authentication > URL Configuration, set the Site URL to `https://usetermcraft.com` and add `https://usetermcraft.com/dashboard` as a redirect URL so signup confirmation emails return users to the app.
+
+## Stripe Test Billing
+
+Use Stripe test mode first.
+
+1. Create a test product and recurring test price in Stripe.
+2. In Render > term-craft > Environment, add:
+   - `STRIPE_SECRET_KEY`
+   - `STRIPE_PRICE_ID`
+   - `STRIPE_WEBHOOK_SECRET`
+3. In Stripe Developers > Webhooks, add endpoint:
+   - `https://usetermcraft.com/api/webhooks/stripe`
+4. Select these events:
+   - `checkout.session.completed`
+   - `customer.subscription.created`
+   - `customer.subscription.updated`
+   - `customer.subscription.deleted`
+   - `invoice.paid`
+   - `invoice.payment_failed`
+5. Redeploy the service.
+
+Use `https://usetermcraft.com/billing` to test Checkout and `https://usetermcraft.com/dashboard` to confirm the plan updates.
 
 ## Email Delivery
 

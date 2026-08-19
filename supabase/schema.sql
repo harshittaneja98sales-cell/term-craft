@@ -119,3 +119,48 @@ drop trigger if exists documents_set_updated_at on public.documents;
 create trigger documents_set_updated_at
   before update on public.documents
   for each row execute function public.set_documents_updated_at();
+
+create table if not exists public.billing_profiles (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  email text not null default '',
+  stripe_customer_id text not null default '',
+  stripe_subscription_id text not null default '',
+  plan text not null default 'free',
+  status text not null default 'inactive',
+  price_id text not null default '',
+  current_period_end timestamptz,
+  cancel_at_period_end boolean not null default false,
+  trial_end timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create unique index if not exists billing_profiles_stripe_customer_idx
+  on public.billing_profiles (stripe_customer_id)
+  where stripe_customer_id <> '';
+
+create index if not exists billing_profiles_status_idx
+  on public.billing_profiles (status);
+
+alter table public.billing_profiles enable row level security;
+
+grant select on public.billing_profiles to authenticated;
+
+drop policy if exists "Users can read own billing profile" on public.billing_profiles;
+create policy "Users can read own billing profile"
+  on public.billing_profiles
+  for select
+  using (auth.uid() = user_id);
+
+create or replace function public.set_billing_profiles_updated_at()
+returns trigger as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists billing_profiles_set_updated_at on public.billing_profiles;
+create trigger billing_profiles_set_updated_at
+  before update on public.billing_profiles
+  for each row execute function public.set_billing_profiles_updated_at();

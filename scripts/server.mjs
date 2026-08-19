@@ -10,7 +10,14 @@ const host = process.env.HOST ?? "0.0.0.0";
 const port = Number(process.env.PORT ?? 4173);
 
 const app = express();
-app.use(express.json({ limit: "2mb" }));
+app.use(
+  express.json({
+    limit: "2mb",
+    verify: (req, _res, buffer) => {
+      req.rawBody = Buffer.from(buffer);
+    },
+  }),
+);
 registerApiRoutes(app);
 
 app.use((req, res, next) => {

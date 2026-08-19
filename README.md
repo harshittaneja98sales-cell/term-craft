@@ -29,6 +29,22 @@ Production admin routes require `ADMIN_API_KEY`. `SUPABASE_PUBLISHABLE_KEY` is u
 
 For account confirmation links, set the Supabase Auth site URL to `https://usetermcraft.com` and add `https://usetermcraft.com/dashboard` as an allowed redirect URL.
 
+## Stripe Test Billing
+
+Term Craft uses Stripe Checkout for test subscription billing and Stripe Customer Portal for subscription management.
+
+1. In Stripe test mode, create a product and recurring price.
+2. In Render, add:
+   - `STRIPE_SECRET_KEY`
+   - `STRIPE_PRICE_ID`
+   - `STRIPE_WEBHOOK_SECRET`
+3. Add a Stripe webhook endpoint:
+   - URL: `https://usetermcraft.com/api/webhooks/stripe`
+   - Events: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`
+4. Redeploy the service.
+
+For production, prefer a restricted API key with only the permissions required for Checkout, Customers, Subscriptions, Billing Portal, and webhook-backed reads.
+
 ## Follow-up Email Delivery
 
 The post-download modal can email the user an editable/signable workspace link through Resend.
