@@ -2510,13 +2510,15 @@ button:focus-visible {
   margin-top: 16px;
 }
 
-.related-templates {
+.related-templates,
+.related-contracts {
   border-top: 1px solid var(--line);
   margin-top: 44px;
   padding-top: 34px;
 }
 
-.related-template-header {
+.related-template-header,
+.related-contracts-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
@@ -2524,16 +2526,71 @@ button:focus-visible {
   margin-bottom: 18px;
 }
 
-.related-template-header h2 {
+.related-template-header h2,
+.related-contracts-header h2 {
   margin-top: 0;
 }
 
-.related-template-grid {
+.related-contracts-header p {
+  max-width: 660px;
+}
+
+.related-category-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.related-category-list span {
+  border: 1px solid rgba(13, 148, 136, 0.22);
+  border-radius: 999px;
+  background: var(--green-soft);
+  color: var(--teal-dark);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 7px 10px;
+}
+
+.related-template-grid,
+.related-contract-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.related-template-grid .template-link-card {
+.related-template-grid .template-link-card,
+.related-contract-grid .template-link-card {
   min-height: 300px;
+}
+
+.sibling-link-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #ffffff;
+  margin-top: 16px;
+  padding: 14px;
+}
+
+.sibling-link-list a {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-alt);
+  color: var(--ink-secondary);
+  font-size: 12.5px;
+  font-weight: 800;
+  line-height: 1.2;
+  padding: 8px 10px;
+  text-decoration: none;
+  transition: all 150ms ease;
+}
+
+.sibling-link-list a:hover {
+  border-color: var(--teal);
+  background: var(--green-soft);
+  color: var(--teal-dark);
 }
 
 /* Media Queries & Responsive Layouts */
@@ -2566,7 +2623,8 @@ button:focus-visible {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .related-template-grid {
+  .related-template-grid,
+  .related-contract-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -2619,7 +2677,8 @@ button:focus-visible {
   .vault-preview-header,
   .home-band,
   .directory-results-header,
-  .related-template-header {
+  .related-template-header,
+  .related-contracts-header {
     align-items: stretch;
     flex-direction: column;
   }
@@ -2704,7 +2763,8 @@ button:focus-visible {
   .seo-card-grid,
   .public-footer-inner,
   .metric-grid,
-  .signature-grid {
+  .signature-grid,
+  .related-contract-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 

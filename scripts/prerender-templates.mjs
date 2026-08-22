@@ -172,6 +172,58 @@ const pages = [
   ),
 ];
 
+const relatedPageLimit = 8;
+const relatedStopWords = new Set([
+  "a",
+  "an",
+  "and",
+  "agreement",
+  "agreements",
+  "contract",
+  "contracts",
+  "for",
+  "free",
+  "pdf",
+  "template",
+  "templates",
+  "the",
+  "to",
+  "with",
+]);
+
+const relatedCategoryMatchers = [
+  {
+    key: "marketing-agency",
+    label: "Marketing & Agency",
+    pattern: /lead|seo|marketing|social|ppc|affiliate|copywriting|agency|retainer|subcontractor/i,
+  },
+  {
+    key: "creative-media",
+    label: "Creative & Media",
+    pattern: /ugc|creator|video|graphic|photography|licensing|production|creative|media/i,
+  },
+  {
+    key: "web-saas-software",
+    label: "Web, SaaS & Software",
+    pattern: /saas|software|shopify|webflow|web|ecommerce|development|store|sla|service-level/i,
+  },
+  {
+    key: "contractor-services",
+    label: "Contractor & Services",
+    pattern: /contractor|subcontractor|assistant|consultant|services|advisory|sow|scope-of-work/i,
+  },
+  {
+    key: "confidentiality-commercial",
+    label: "Confidentiality & Commercial",
+    pattern: /nda|confidential|confidentiality|referral|advisory|lease|commercial|client-list/i,
+  },
+  {
+    key: "property-construction",
+    label: "Property & Construction",
+    pattern: /construction|lien|hvac|property|lease|subcontractor/i,
+  },
+];
+
 function escapeHtml(value) {
   return value
     .replace(/&/g, "&amp;")
@@ -180,12 +232,92 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
-function getRelatedPages(page) {
-  return pages.filter((candidate) => candidate.path !== page.path).slice(0, 4);
+function getPageSearchText(page) {
+  return [
+    page.path,
+    page.title,
+    page.description,
+    page.h1,
+    page.intro,
+    ...(page.fields ?? []),
+    ...(page.cards ?? []).flat(),
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function tokenizeRelatedText(value) {
+  return new Set(
+    value
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((token) => token.length > 2 && !relatedStopWords.has(token)),
+  );
+}
+
+function getPageCategoryKeys(page) {
+  const text = getPageSearchText(page);
+  const matches = relatedCategoryMatchers
+    .filter((category) => category.pattern.test(text))
+    .map((category) => category.key);
+
+  return matches.length ? matches : ["general-business"];
+}
+
+function getPageCategoryLabels(page) {
+  const keys = getPageCategoryKeys(page);
+  const labels = keys
+    .map((key) => relatedCategoryMatchers.find((category) => category.key === key)?.label)
+    .filter(Boolean);
+
+  return labels.length ? labels : ["General Business"];
+}
+
+function getRelatedPages(page, limit = relatedPageLimit) {
+  const currentTokens = tokenizeRelatedText(getPageSearchText(page));
+  const currentCategories = new Set(getPageCategoryKeys(page));
+  const currentFieldTokens = tokenizeRelatedText((page.fields ?? []).join(" "));
+
+  return pages
+    .map((candidate, index) => {
+      if (candidate.path === page.path) {
+        return { score: -1, candidate, index };
+      }
+
+      const candidateTokens = tokenizeRelatedText(getPageSearchText(candidate));
+      const candidateCategories = new Set(getPageCategoryKeys(candidate));
+      const candidateFieldTokens = tokenizeRelatedText((candidate.fields ?? []).join(" "));
+      let score = 0;
+
+      for (const category of candidateCategories) {
+        if (currentCategories.has(category)) {
+          score += 24;
+        }
+      }
+
+      for (const token of candidateTokens) {
+        if (currentTokens.has(token)) {
+          score += 4;
+        }
+      }
+
+      for (const token of candidateFieldTokens) {
+        if (currentFieldTokens.has(token)) {
+          score += 3;
+        }
+      }
+
+      return { score, candidate, index };
+    })
+    .filter((item) => item.score >= 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, limit)
+    .map((item) => item.candidate);
 }
 
 function renderStaticContent(page) {
   const relatedPages = getRelatedPages(page);
+  const categoryLabels = getPageCategoryLabels(page).slice(0, 3);
 
   return `
     <main class="template-page-shell">
@@ -236,17 +368,24 @@ function renderStaticContent(page) {
               .map(([question, answer]) => `<article><h3>${escapeHtml(question)}</h3><p>${escapeHtml(answer)}</p></article>`)
               .join("")}
           </div>
-          <section class="related-templates" aria-labelledby="related-templates-title">
-            <div class="related-template-header">
+          <section class="related-contracts" aria-labelledby="related-contracts-title">
+            <div class="related-contracts-header">
               <div>
-                <h2 id="related-templates-title">Related Contract Templates</h2>
-                <p>Keep building the same agreement stack with adjacent agency, marketing, and web service documents.</p>
+                <div class="template-kicker">Sibling internal links</div>
+                <h2 id="related-contracts-title">Related Contracts</h2>
+                <p>Continue through adjacent templates selected by business category, shared form fields, and contract intent.</p>
+                <div class="related-category-list" aria-label="Template cluster">
+                  ${categoryLabels.map((label) => `<span>${escapeHtml(label)}</span>`).join("")}
+                </div>
               </div>
-              <a class="text-link" href="/templates">View all templates →</a>
+              <a class="text-link" href="/templates">View all templates</a>
             </div>
-            <div class="template-link-grid related-template-grid">
+            <div class="template-link-grid related-contract-grid">
               ${relatedPages.map((relatedPage) => renderTemplateCard(relatedPage)).join("")}
             </div>
+            <nav class="sibling-link-list" aria-label="More related contract links">
+              ${relatedPages.map((relatedPage) => `<a href="${relatedPage.path}">${escapeHtml(relatedPage.h1.replace(" Template", ""))}</a>`).join("")}
+            </nav>
           </section>
         </div>
       </section>
@@ -590,7 +729,7 @@ function buildTemplateStructuredData(page) {
   const templateId = `${pageUrl}#template`;
   const breadcrumbId = `${pageUrl}#breadcrumb`;
   const faqId = `${pageUrl}#faq`;
-  const relatedListId = `${pageUrl}#related-templates`;
+  const relatedListId = `${pageUrl}#related-contracts`;
 
   return {
     "@context": "https://schema.org",
@@ -690,7 +829,7 @@ function buildTemplateStructuredData(page) {
       {
         "@type": "ItemList",
         "@id": relatedListId,
-        name: "Related Contract Templates",
+        name: "Related Contracts",
         itemListElement: relatedPages.map((relatedPage, index) => ({
           "@type": "ListItem",
           position: index + 1,

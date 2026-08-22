@@ -2564,6 +2564,63 @@ const seoTemplateConfigs: Record<string, SeoTemplateConfig> = {
 };
 
 const seoTemplateList = Object.values(seoTemplateConfigs);
+const relatedTemplateLimit = 8;
+const relatedStopWords = new Set([
+  "a",
+  "an",
+  "and",
+  "agreement",
+  "agreements",
+  "contract",
+  "contracts",
+  "for",
+  "free",
+  "pdf",
+  "template",
+  "templates",
+  "the",
+  "to",
+  "with",
+]);
+
+const relatedCategoryMatchers = [
+  {
+    key: "marketing-agency",
+    label: "Marketing & Agency",
+    description: "Retainers, PPC, SEO, lead generation, social, affiliate, and subcontractor documents.",
+    pattern: /lead|seo|marketing|social|ppc|affiliate|copywriting|agency|retainer|subcontractor/i,
+  },
+  {
+    key: "creative-media",
+    label: "Creative & Media",
+    description: "Creator, UGC, video, design, photography, and media licensing agreements.",
+    pattern: /ugc|creator|video|graphic|photography|licensing|production|creative|media/i,
+  },
+  {
+    key: "web-saas-software",
+    label: "Web, SaaS & Software",
+    description: "SaaS SLAs, software SOWs, e-commerce, Shopify, Webflow, and web development contracts.",
+    pattern: /saas|software|shopify|webflow|web|ecommerce|development|store|sla|service-level/i,
+  },
+  {
+    key: "contractor-services",
+    label: "Contractor & Services",
+    description: "Independent contractor, subcontractor, assistant, consultant, and professional service terms.",
+    pattern: /contractor|subcontractor|assistant|consultant|services|advisory|sow|scope-of-work/i,
+  },
+  {
+    key: "confidentiality-commercial",
+    label: "Confidentiality & Commercial",
+    description: "NDAs, referral, advisory, lease addendum, client protection, and business confidentiality terms.",
+    pattern: /nda|confidential|confidentiality|referral|advisory|lease|commercial|client-list/i,
+  },
+  {
+    key: "property-construction",
+    label: "Property & Construction",
+    description: "Construction, lien waiver, HVAC, property, and trade subcontractor documents.",
+    pattern: /construction|lien|hvac|property|lease|subcontractor/i,
+  },
+];
 
 function getTemplateTags(config: SeoTemplateConfig) {
   const ignoredKeys = new Set([
@@ -2585,10 +2642,100 @@ function getTemplateTags(config: SeoTemplateConfig) {
     .map((field) => field.label);
 }
 
-function getRelatedTemplates(config: SeoTemplateConfig) {
+function getTemplateSearchText(config: SeoTemplateConfig) {
+  return [
+    config.path,
+    config.title,
+    config.metaDescription,
+    config.h1,
+    config.intro,
+    config.contractTitle,
+    config.planName,
+    ...config.fields.map((field) => `${field.label} ${field.key}`),
+    ...config.seo.cards.map((card) => `${card.title} ${card.body}`),
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function tokenizeRelatedText(value: string) {
+  return new Set(
+    value
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((token) => token.length > 2 && !relatedStopWords.has(token)),
+  );
+}
+
+function getTemplateCategoryKeys(config: SeoTemplateConfig) {
+  const text = getTemplateSearchText(config);
+  const matches = relatedCategoryMatchers
+    .filter((category) => category.pattern.test(text))
+    .map((category) => category.key);
+
+  return matches.length ? matches : ["general-business"];
+}
+
+function getTemplateCategoryLabels(config: SeoTemplateConfig) {
+  const categoryKeys = getTemplateCategoryKeys(config);
+  const labels = categoryKeys
+    .map(
+      (key) =>
+        relatedCategoryMatchers.find((category) => category.key === key)?.label,
+    )
+    .filter(Boolean) as string[];
+
+  return labels.length ? labels : ["General Business"];
+}
+
+function getRelatedTemplates(config: SeoTemplateConfig, limit = relatedTemplateLimit) {
+  const currentTokens = tokenizeRelatedText(getTemplateSearchText(config));
+  const currentCategories = new Set(getTemplateCategoryKeys(config));
+  const currentFieldTokens = tokenizeRelatedText(
+    config.fields.map((field) => `${field.label} ${field.key}`).join(" "),
+  );
+
   return seoTemplateList
-    .filter((template) => template.path !== config.path)
-    .slice(0, 4);
+    .map((template, index) => {
+      if (template.path === config.path) {
+        return { score: -1, template, index };
+      }
+
+      const candidateTokens = tokenizeRelatedText(getTemplateSearchText(template));
+      const candidateCategories = new Set(getTemplateCategoryKeys(template));
+      const candidateFieldTokens = tokenizeRelatedText(
+        template.fields.map((field) => `${field.label} ${field.key}`).join(" "),
+      );
+      let score = 0;
+
+      for (const category of candidateCategories) {
+        if (currentCategories.has(category)) {
+          score += 24;
+        }
+      }
+
+      for (const token of candidateTokens) {
+        if (currentTokens.has(token)) {
+          score += 4;
+        }
+      }
+
+      for (const token of candidateFieldTokens) {
+        if (currentFieldTokens.has(token)) {
+          score += 3;
+        }
+      }
+
+      if (template.planName === config.planName) {
+        score += 6;
+      }
+
+      return { score, template, index };
+    })
+    .filter((item) => item.score >= 0)
+    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .slice(0, limit)
+    .map((item) => item.template);
 }
 
 function absoluteUrl(origin: string, pagePath: string) {
@@ -2608,7 +2755,7 @@ function createTemplateStructuredData(
   const templateId = `${pageUrl}#template`;
   const breadcrumbId = `${pageUrl}#breadcrumb`;
   const faqId = `${pageUrl}#faq`;
-  const relatedListId = `${pageUrl}#related-templates`;
+  const relatedListId = `${pageUrl}#related-contracts`;
 
   return {
     "@context": "https://schema.org",
@@ -2708,7 +2855,7 @@ function createTemplateStructuredData(
       {
         "@type": "ItemList",
         "@id": relatedListId,
-        name: "Related Contract Templates",
+        name: "Related Contracts",
         itemListElement: relatedTemplates.map((template, index) => ({
           "@type": "ListItem",
           position: index + 1,
@@ -3171,6 +3318,54 @@ function TemplateLinkCard({ template }: { template: SeoTemplateConfig }) {
         <ArrowRight size={16} />
       </a>
     </article>
+  );
+}
+
+function RelatedContractsSection({
+  currentTemplate,
+  relatedTemplates,
+}: {
+  currentTemplate: SeoTemplateConfig;
+  relatedTemplates: SeoTemplateConfig[];
+}) {
+  const categoryLabels = getTemplateCategoryLabels(currentTemplate).slice(0, 3);
+
+  return (
+    <section className="related-contracts" aria-labelledby="related-contracts-title">
+      <div className="related-contracts-header">
+        <div>
+          <div className="template-kicker">Sibling internal links</div>
+          <h2 id="related-contracts-title">Related Contracts</h2>
+          <p>
+            Continue through adjacent templates selected by business category,
+            shared form fields, and contract intent.
+          </p>
+          <div className="related-category-list" aria-label="Template cluster">
+            {categoryLabels.map((label) => (
+              <span key={label}>{label}</span>
+            ))}
+          </div>
+        </div>
+        <a className="text-link" href="/templates">
+          View all templates
+          <ArrowRight size={16} />
+        </a>
+      </div>
+
+      <div className="template-link-grid related-contract-grid">
+        {relatedTemplates.map((template) => (
+          <TemplateLinkCard key={template.path} template={template} />
+        ))}
+      </div>
+
+      <nav className="sibling-link-list" aria-label="More related contract links">
+        {relatedTemplates.map((template) => (
+          <a key={template.path} href={template.path}>
+            {template.h1.replace(" Template", "")}
+          </a>
+        ))}
+      </nav>
+    </section>
   );
 }
 
@@ -4478,27 +4673,10 @@ function SeoTemplatePage({ config }: { config: SeoTemplateConfig }) {
               ))}
             </div>
 
-            <section className="related-templates" aria-labelledby="related-templates-title">
-              <div className="related-template-header">
-                <div>
-                  <h2 id="related-templates-title">Related Contract Templates</h2>
-                  <p>
-                    Keep building the same agreement stack with adjacent agency,
-                    marketing, and web service documents.
-                  </p>
-                </div>
-                <a className="text-link" href="/templates">
-                  View all templates
-                  <ArrowRight size={16} />
-                </a>
-              </div>
-
-              <div className="template-link-grid related-template-grid">
-                {relatedTemplates.map((template) => (
-                  <TemplateLinkCard key={template.path} template={template} />
-                ))}
-              </div>
-            </section>
+            <RelatedContractsSection
+              currentTemplate={config}
+              relatedTemplates={relatedTemplates}
+            />
           </div>
         </section>
       </main>
