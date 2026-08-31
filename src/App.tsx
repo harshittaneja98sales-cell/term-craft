@@ -33,8 +33,13 @@ import additionalTemplatesRaw from "./additional-templates.json";
 type TemplateKey = "saas" | "services" | "nda" | "dpa";
 type ClauseKey =
   | "autoRenewal"
+  | "killFee30Days"
+  | "ipReleaseOnFinalPayment"
+  | "milestoneApprovals"
   | "securityAddendum"
   | "slaCredits"
+  | "net15PaymentTerms"
+  | "nonSolicitation"
   | "terminationForConvenience"
   | "ipAssignment"
   | "marketingRights"
@@ -91,7 +96,7 @@ type AuditEvent = {
 
 type StoredDraft = {
   contract: ContractState;
-  clauses?: Record<ClauseKey, boolean>;
+  clauses?: Partial<Record<ClauseKey, boolean>>;
   signers: Signer[];
   auditEvents: AuditEvent[];
 };
@@ -299,6 +304,31 @@ const clauseCatalog: Array<{
   detail: string;
 }> = [
   {
+    key: "net15PaymentTerms",
+    label: "Net-15 payment terms",
+    detail: "Makes invoices due 15 days after receipt.",
+  },
+  {
+    key: "milestoneApprovals",
+    label: "Milestone approvals",
+    detail: "Requires written approval before moving to the next phase.",
+  },
+  {
+    key: "killFee30Days",
+    label: "30-day kill fee",
+    detail: "Protects against late cancellation or paused retainers.",
+  },
+  {
+    key: "nonSolicitation",
+    label: "Non-solicitation",
+    detail: "Restricts bypassing staff, contractors, and introduced clients.",
+  },
+  {
+    key: "ipReleaseOnFinalPayment",
+    label: "IP release on final payment",
+    detail: "Transfers custom work only after final invoice clearance.",
+  },
+  {
     key: "autoRenewal",
     label: "Auto-renewal",
     detail: "Renews unless notice is given before the term ends.",
@@ -341,6 +371,11 @@ const clauseCatalog: Array<{
 ];
 
 const initialClauses: Record<ClauseKey, boolean> = {
+  net15PaymentTerms: true,
+  milestoneApprovals: true,
+  killFee30Days: false,
+  nonSolicitation: true,
+  ipReleaseOnFinalPayment: true,
   autoRenewal: true,
   securityAddendum: true,
   slaCredits: true,
@@ -350,6 +385,94 @@ const initialClauses: Record<ClauseKey, boolean> = {
   subprocessors: true,
   mutualIndemnity: true,
 };
+
+function normalizeClauses(
+  clauses?: Partial<Record<ClauseKey, boolean>>,
+): Record<ClauseKey, boolean> {
+  return {
+    ...initialClauses,
+    ...(clauses ?? {}),
+  };
+}
+
+type JurisdictionOption = {
+  label: string;
+  notice: string;
+  value: string;
+  venue: string;
+};
+
+const jurisdictionOptions: JurisdictionOption[] = [
+  {
+    label: "Delaware, United States",
+    notice:
+      "Common US business-law default. Review entity, notice, and enforceability issues with counsel.",
+    value: "Delaware",
+    venue: "state or federal courts located in Delaware",
+  },
+  {
+    label: "California, United States",
+    notice:
+      "Review California-specific contractor, non-solicit, privacy, and employment-related limits.",
+    value: "California",
+    venue: "state or federal courts located in California",
+  },
+  {
+    label: "New York, United States",
+    notice:
+      "Review New York notice, fee, forum, and commercial contract requirements.",
+    value: "New York",
+    venue: "state or federal courts located in New York",
+  },
+  {
+    label: "Texas, United States",
+    notice:
+      "Review Texas venue, payment, contractor, and service agreement requirements.",
+    value: "Texas",
+    venue: "state or federal courts located in Texas",
+  },
+  {
+    label: "England and Wales",
+    notice:
+      "Use UK terminology and review local consumer, data, and commercial agency rules.",
+    value: "England and Wales",
+    venue: "courts of England and Wales",
+  },
+  {
+    label: "Ontario, Canada",
+    notice:
+      "Review Canadian provincial law, tax, privacy, and electronic signature requirements.",
+    value: "Ontario, Canada",
+    venue: "courts located in Ontario, Canada",
+  },
+  {
+    label: "India",
+    notice:
+      "Review Indian stamp duty, tax, payment, employment, and data protection requirements.",
+    value: "India",
+    venue: "competent courts in India",
+  },
+  {
+    label: "Singapore",
+    notice:
+      "Review Singapore commercial, tax, data, and electronic transaction requirements.",
+    value: "Singapore",
+    venue: "courts of Singapore",
+  },
+];
+
+function getJurisdictionOption(value: string) {
+  return (
+    jurisdictionOptions.find((option) => option.value === value) ??
+    jurisdictionOptions[0]
+  );
+}
+
+function buildJurisdictionClause(governingLaw: string) {
+  const option = getJurisdictionOption(governingLaw);
+
+  return `This agreement is governed by the laws of ${option.value}, without regard to conflict of law rules. The parties consent to exclusive jurisdiction and venue in the ${option.venue} for disputes arising from this agreement. ${option.notice}`;
+}
 
 function createDefaultContract(): ContractState {
   return {
@@ -1024,11 +1147,14 @@ function buildContractSections(
   clauses: Record<ClauseKey, boolean>,
 ): ContractSection[] {
   const parties = `${contract.providerName}, with an address at ${contract.providerAddress} ("Provider"), and ${contract.customerName}, with an address at ${contract.customerAddress} ("Customer")`;
+  const effectivePaymentDueDays = clauses.net15PaymentTerms
+    ? 15
+    : contract.paymentDueDays;
   const term = `The initial term begins on ${formatDate(
     contract.effectiveDate,
   )} and continues for ${contract.termMonths} months unless terminated earlier under this agreement.`;
-  const payment = `Customer will pay Provider ${contract.feeAmount} ${contract.billingCycle} for the ${contract.planName} plan. Undisputed invoices are due within ${contract.paymentDueDays} days after receipt.`;
-  const general = `This agreement is governed by the laws of ${contract.governingLaw}, without regard to conflict of law rules. Neither party may assign this agreement without the other party's prior written consent, except to an affiliate or successor in connection with a merger, reorganization, or sale of substantially all assets.`;
+  const payment = `Customer will pay Provider ${contract.feeAmount} ${contract.billingCycle} for the ${contract.planName} plan. Undisputed invoices are due within ${effectivePaymentDueDays} days after receipt.`;
+  const general = `${buildJurisdictionClause(contract.governingLaw)} Neither party may assign this agreement without the other party's prior written consent, except to an affiliate or successor in connection with a merger, reorganization, or sale of substantially all assets.`;
 
   const sharedSections: ContractSection[] = [
     {
@@ -1069,7 +1195,7 @@ function buildContractSections(
       },
       {
         heading: "Acceptance",
-        body: `Customer will review deliverables within ${contract.paymentDueDays} days after delivery. Deliverables are deemed accepted unless Customer identifies a material non-conformity in writing during that review period.`,
+        body: `Customer will review deliverables within ${effectivePaymentDueDays} days after delivery. Deliverables are deemed accepted unless Customer identifies a material non-conformity in writing during that review period.`,
       },
       ...sharedSections,
     ];
@@ -1156,10 +1282,38 @@ function buildContractSections(
     });
   }
 
+  if (clauses.milestoneApprovals && contract.template === "services") {
+    sections.push({
+      heading: "Milestone Approvals",
+      body: `Provider may divide the work into milestones and request written approval by email, shared workspace, or signed change order before moving to the next phase. Customer will review each milestone within ${effectivePaymentDueDays} days after delivery. If Customer does not approve, reject, or request specific revisions during that period, the milestone is deemed approved for billing and scheduling purposes.`,
+    });
+  }
+
+  if (clauses.killFee30Days) {
+    sections.push({
+      heading: "30-Day Kill Fee",
+      body: "If Customer cancels, pauses, or materially reduces an active project or retainer without at least 30 days' prior written notice, Customer will pay all accrued fees, approved expenses, non-cancellable commitments, and a kill fee equal to 30 days of the recurring fee or the next unpaid milestone amount, whichever is more applicable to the engagement.",
+    });
+  }
+
+  if (clauses.nonSolicitation) {
+    sections.push({
+      heading: "Non-Solicitation",
+      body: "During the term and for 12 months after termination, neither party will knowingly solicit for direct employment the other party's employees or dedicated contractors who were materially involved in the services. Customer will not bypass Provider to directly hire or contract with Provider personnel introduced through the engagement without Provider's prior written consent.",
+    });
+  }
+
   if (clauses.ipAssignment) {
     sections.push({
       heading: "Custom Deliverables",
       body: "Subject to full payment, Provider assigns to Customer its rights in custom deliverables specifically created for Customer under a statement of work, excluding Provider's pre-existing materials, platform, tools, generic knowledge, and reusable components.",
+    });
+  }
+
+  if (clauses.ipReleaseOnFinalPayment) {
+    sections.push({
+      heading: "IP Release Upon Final Invoice Clearance",
+      body: "Customer receives a limited internal review license to draft deliverables before payment is complete. Ownership or broad usage rights in custom final deliverables transfer only after Provider receives cleared payment of all undisputed final invoices for the applicable project or milestone. Provider retains pre-existing tools, templates, methods, and reusable components.",
     });
   }
 
@@ -1475,6 +1629,105 @@ function buildExportHtml(
   </table>
 </body>
 </html>`;
+}
+
+function buildPlainTextExport(
+  contract: ContractState,
+  sections: ContractSection[],
+  signers: Signer[],
+  auditEvents: AuditEvent[],
+  status: string,
+) {
+  const sectionText = sections
+    .map((section, index) => `${index + 1}. ${section.heading}\n${section.body}`)
+    .join("\n\n");
+  const signerText = signers
+    .map(
+      (signer) =>
+        `${signer.role}: ${signer.name || "Unnamed signer"}\nTitle: ${
+          signer.title || signer.role
+        }\nStatus: ${
+          signer.signedAt ? `Signed ${formatTimestamp(signer.signedAt)}` : "Unsigned"
+        }`,
+    )
+    .join("\n\n");
+  const auditText = auditEvents
+    .map(
+      (event) =>
+        `${formatTimestamp(event.at)} | ${event.actor} | ${event.action} | ${event.details}`,
+    )
+    .join("\n");
+
+  return `${contract.contractTitle}
+Status: ${status}
+Effective: ${formatDate(contract.effectiveDate)}
+Parties: ${contract.providerName} and ${contract.customerName}
+
+${sectionText}
+
+Signatures
+${signerText}
+
+Audit Trail
+${auditText}`;
+}
+
+function escapeMarkdown(value: string) {
+  return value.replace(/([\\`*_{}[\]()#+\-.!|>])/g, "\\$1");
+}
+
+function buildMarkdownExport(
+  contract: ContractState,
+  sections: ContractSection[],
+  signers: Signer[],
+  auditEvents: AuditEvent[],
+  status: string,
+) {
+  const sectionText = sections
+    .map(
+      (section, index) =>
+        `## ${index + 1}. ${escapeMarkdown(section.heading)}\n\n${section.body}`,
+    )
+    .join("\n\n");
+  const signerText = signers
+    .map(
+      (signer) =>
+        `- **${escapeMarkdown(signer.role)}:** ${escapeMarkdown(
+          signer.name || "Unnamed signer",
+        )} (${escapeMarkdown(signer.title || signer.role)}) - ${
+          signer.signedAt ? `Signed ${formatTimestamp(signer.signedAt)}` : "Unsigned"
+        }`,
+    )
+    .join("\n");
+  const auditText = auditEvents
+    .map(
+      (event) =>
+        `| ${escapeMarkdown(formatTimestamp(event.at))} | ${escapeMarkdown(
+          event.actor,
+        )} | ${escapeMarkdown(event.action)} | ${escapeMarkdown(event.details)} |`,
+    )
+    .join("\n");
+
+  return `# ${escapeMarkdown(contract.contractTitle)}
+
+**Status:** ${escapeMarkdown(status)}
+**Effective:** ${escapeMarkdown(formatDate(contract.effectiveDate))}
+**Parties:** ${escapeMarkdown(contract.providerName)} and ${escapeMarkdown(
+    contract.customerName,
+  )}
+
+${sectionText}
+
+## Signatures
+
+${signerText}
+
+## Audit Trail
+
+| Time | Actor | Action | Details |
+| --- | --- | --- | --- |
+${auditText}
+`;
 }
 
 type PageMetadata = {
@@ -5166,7 +5419,7 @@ function ContractBuilderApp() {
   );
   const [clauses, setClauses] =
     useState<Record<ClauseKey, boolean>>(
-      () => storedDraft?.clauses ?? initialClauses,
+      () => normalizeClauses(storedDraft?.clauses),
     );
   const [signers, setSigners] = useState<Signer[]>(
     () => storedDraft?.signers ?? createDefaultSigners(),
@@ -5387,6 +5640,48 @@ function ContractBuilderApp() {
       `${contract.contractTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.html`,
       "text/html;charset=utf-8",
       html,
+    );
+    setAuditEvents(nextAuditEvents);
+  }
+
+  function downloadPlainText() {
+    const exportEvent = createAuditEvent(
+      "System",
+      "Plain text exported",
+      "Plain text contract downloaded.",
+    );
+    const nextAuditEvents = [exportEvent, ...auditEvents];
+    downloadBlob(
+      `${createFileSlug(contract.contractTitle)}.txt`,
+      "text/plain;charset=utf-8",
+      buildPlainTextExport(
+        contract,
+        sections,
+        signers,
+        nextAuditEvents,
+        status,
+      ),
+    );
+    setAuditEvents(nextAuditEvents);
+  }
+
+  function downloadMarkdown() {
+    const exportEvent = createAuditEvent(
+      "System",
+      "Markdown exported",
+      "Markdown contract downloaded.",
+    );
+    const nextAuditEvents = [exportEvent, ...auditEvents];
+    downloadBlob(
+      `${createFileSlug(contract.contractTitle)}.md`,
+      "text/markdown;charset=utf-8",
+      buildMarkdownExport(
+        contract,
+        sections,
+        signers,
+        nextAuditEvents,
+        status,
+      ),
     );
     setAuditEvents(nextAuditEvents);
   }
@@ -5656,12 +5951,21 @@ function ContractBuilderApp() {
                     />
                   </Field>
                   <Field label="Governing law">
-                    <input
+                    <select
                       value={contract.governingLaw}
                       onChange={(event) =>
                         updateContract("governingLaw", event.target.value)
                       }
-                    />
+                    >
+                      {jurisdictionOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <small className="jurisdiction-note">
+                      {getJurisdictionOption(contract.governingLaw).notice}
+                    </small>
                   </Field>
                   <Field label="Data region">
                     <input
@@ -5741,6 +6045,24 @@ function ContractBuilderApp() {
               <span>{sections.length} sections</span>
             </div>
             <div className="toolbar-actions">
+              <button
+                className="button secondary export-action"
+                title="Download Markdown"
+                type="button"
+                onClick={downloadMarkdown}
+              >
+                <FileText size={17} />
+                <span>MD</span>
+              </button>
+              <button
+                className="button secondary export-action"
+                title="Download plain text"
+                type="button"
+                onClick={downloadPlainText}
+              >
+                <FileText size={17} />
+                <span>TXT</span>
+              </button>
               <button
                 className="icon-button"
                 title="Download HTML backup"

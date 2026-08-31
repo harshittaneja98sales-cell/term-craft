@@ -435,6 +435,13 @@ button:focus-visible {
   font-weight: 500;
 }
 
+.jurisdiction-note {
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
 .form-grid + .field {
   margin-top: 12px;
 }
@@ -585,6 +592,11 @@ button:focus-visible {
 .stage-toolbar span {
   color: var(--muted);
   font-size: 12px;
+}
+
+.export-action {
+  min-width: 72px;
+  padding-inline: 12px;
 }
 
 .document {
@@ -2839,7 +2851,8 @@ button:focus-visible {
   }
 
   .toolbar-actions {
-    justify-content: flex-end;
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 
   .document {
