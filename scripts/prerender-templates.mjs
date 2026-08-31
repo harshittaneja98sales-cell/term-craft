@@ -4,6 +4,9 @@ import path from "node:path";
 const siteUrl = process.env.SITE_URL?.replace(/\/$/, "");
 const sitemapBaseUrl = siteUrl || "https://usetermcraft.com";
 const schemaBaseUrl = sitemapBaseUrl.replace(/\/$/, "");
+const siteName = "Term Craft";
+const defaultRobots =
+  "index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1";
 const distDir = path.resolve(process.cwd(), "dist");
 const shellPath = path.join(distDir, "index.html");
 const shell = fs.readFileSync(shellPath, "utf8");
@@ -841,10 +844,31 @@ function buildTemplateStructuredData(page) {
   };
 }
 
+function renderMetadataTags(page) {
+  const pageUrl = absoluteUrl(page.path);
+  const ogType = page.ogType ?? (page.path.startsWith("/templates/") ? "article" : "website");
+  const robots = page.robots ?? defaultRobots;
+
+  return [
+    `<meta name="description" content="${escapeHtml(page.description)}" />`,
+    `<meta name="robots" content="${escapeHtml(robots)}" />`,
+    `<meta name="application-name" content="${escapeHtml(siteName)}" />`,
+    `<meta name="author" content="${escapeHtml(siteName)}" />`,
+    `<link rel="canonical" href="${pageUrl}" />`,
+    `<meta property="og:locale" content="en_US" />`,
+    `<meta property="og:site_name" content="${escapeHtml(siteName)}" />`,
+    `<meta property="og:type" content="${escapeHtml(ogType)}" />`,
+    `<meta property="og:title" content="${escapeHtml(page.title)}" />`,
+    `<meta property="og:description" content="${escapeHtml(page.description)}" />`,
+    `<meta property="og:url" content="${pageUrl}" />`,
+    `<meta name="twitter:card" content="summary" />`,
+    `<meta name="twitter:title" content="${escapeHtml(page.title)}" />`,
+    `<meta name="twitter:description" content="${escapeHtml(page.description)}" />`,
+    `<meta name="twitter:url" content="${pageUrl}" />`,
+  ].join("");
+}
+
 function renderHtml(page, staticContent = renderStaticContent(page)) {
-  const canonical = siteUrl
-    ? `<link rel="canonical" href="${siteUrl}${page.path}" />`
-    : "";
   const schema =
     page.path.startsWith("/templates/") && Array.isArray(page.faq)
       ? buildTemplateStructuredData(page)
@@ -854,7 +878,7 @@ function renderHtml(page, staticContent = renderStaticContent(page)) {
     .replace(/<title>.*?<\/title>/, `<title>${escapeHtml(page.title)}</title>`)
     .replace(
       "</head>",
-      `<meta name="description" content="${escapeHtml(page.description)}" />${canonical}<script id="termcraft-structured-data" type="application/ld+json">${serializeJsonLd(schema)}</script></head>`,
+      `${renderMetadataTags(page)}<script id="termcraft-structured-data" type="application/ld+json">${serializeJsonLd(schema)}</script></head>`,
     )
     .replace(
       '<div id="root"></div>',

@@ -251,6 +251,10 @@ const STORAGE_KEY = "termcraft.contract-draft.v1";
 const TEMPLATE_DOWNLOAD_LEADS_KEY = "termcraft.template-download-leads.v1";
 const AUTH_SESSION_KEY = "termcraft.auth-session.v1";
 const B2B_LEAD_GEN_PATH = "/templates/b2b-lead-generation-retainer-agreement";
+const SITE_NAME = "Term Craft";
+const PUBLIC_SITE_ORIGIN = "https://usetermcraft.com";
+const DEFAULT_ROBOTS =
+  "index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1";
 
 const templateDefaults: Record<
   TemplateKey,
@@ -1473,27 +1477,58 @@ function buildExportHtml(
 </html>`;
 }
 
+type PageMetadata = {
+  canonicalPath: string;
+  description: string;
+  ogType?: "article" | "website";
+  robots?: string;
+  title: string;
+};
+
+function upsertMetaTag(
+  attributeName: "name" | "property",
+  attributeValue: string,
+  content: string,
+) {
+  let metaTag = document.querySelector<HTMLMetaElement>(
+    `meta[${attributeName}="${attributeValue}"]`,
+  );
+
+  if (!metaTag) {
+    metaTag = document.createElement("meta");
+    metaTag.setAttribute(attributeName, attributeValue);
+    document.head.appendChild(metaTag);
+  }
+
+  metaTag.content = content;
+}
+
 function usePageMetadata({
   canonicalPath,
   description,
+  ogType = "website",
+  robots = DEFAULT_ROBOTS,
   title,
-}: {
-  canonicalPath: string;
-  description: string;
-  title: string;
-}) {
+}: PageMetadata) {
   useEffect(() => {
+    const canonicalUrl = absoluteUrl(PUBLIC_SITE_ORIGIN, canonicalPath);
+
     document.title = title;
 
-    let descriptionTag = document.querySelector<HTMLMetaElement>(
-      'meta[name="description"]',
-    );
-    if (!descriptionTag) {
-      descriptionTag = document.createElement("meta");
-      descriptionTag.name = "description";
-      document.head.appendChild(descriptionTag);
-    }
-    descriptionTag.content = description;
+    upsertMetaTag("name", "description", description);
+    upsertMetaTag("name", "robots", robots);
+    upsertMetaTag("name", "application-name", SITE_NAME);
+    upsertMetaTag("name", "author", SITE_NAME);
+    upsertMetaTag("property", "og:locale", "en_US");
+    upsertMetaTag("property", "og:site_name", SITE_NAME);
+    upsertMetaTag("property", "og:type", ogType);
+    upsertMetaTag("property", "og:title", title);
+    upsertMetaTag("property", "og:description", description);
+    upsertMetaTag("property", "og:url", canonicalUrl);
+    upsertMetaTag("name", "twitter:card", "summary");
+    upsertMetaTag("name", "twitter:title", title);
+    upsertMetaTag("name", "twitter:description", description);
+    upsertMetaTag("name", "twitter:url", canonicalUrl);
 
     let canonicalTag = document.querySelector<HTMLLinkElement>(
       'link[rel="canonical"]',
@@ -1503,22 +1538,9 @@ function usePageMetadata({
       canonicalTag.rel = "canonical";
       document.head.appendChild(canonicalTag);
     }
-    canonicalTag.href = `${window.location.origin}${canonicalPath}`;
-  }, [canonicalPath, description, title]);
-}
 
-function useRobotsMeta(content: string) {
-  useEffect(() => {
-    let robotsTag = document.querySelector<HTMLMetaElement>(
-      'meta[name="robots"]',
-    );
-    if (!robotsTag) {
-      robotsTag = document.createElement("meta");
-      robotsTag.name = "robots";
-      document.head.appendChild(robotsTag);
-    }
-    robotsTag.content = content;
-  }, [content]);
+    canonicalTag.href = canonicalUrl;
+  }, [canonicalPath, description, ogType, robots, title]);
 }
 
 function useJsonLd(schema: unknown | null) {
@@ -1540,7 +1562,7 @@ function useJsonLd(schema: unknown | null) {
       document.head.appendChild(schemaScript);
     }
 
-    schemaScript.textContent = JSON.stringify(schema);
+    schemaScript.textContent = JSON.stringify(schema).replace(/</g, "\\u003c");
   }, [schema]);
 }
 
@@ -3122,11 +3144,7 @@ function TemplatesDirectoryPage() {
   const [activeCategory, setActiveCategory] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const structuredData = useMemo(() => {
-    if (typeof window === "undefined") {
-      return null;
-    }
-
-    return createDirectoryStructuredData(window.location.origin);
+    return createDirectoryStructuredData(PUBLIC_SITE_ORIGIN);
   }, []);
 
   usePageMetadata({
@@ -3465,8 +3483,8 @@ function BillingPage() {
     title: "Pricing & Billing | Term Craft",
     description:
       "Term Craft test billing page for upgrading to a paid SaaS plan.",
+    robots: "noindex,nofollow",
   });
-  useRobotsMeta("noindex,nofollow");
 
   async function loadBillingPage() {
     setIsLoading(true);
@@ -3637,8 +3655,8 @@ function AuthPage() {
     canonicalPath: "/login",
     title: "Sign In | Term Craft",
     description: "Sign in to Term Craft to save contracts in your document vault.",
+    robots: "noindex,nofollow",
   });
-  useRobotsMeta("noindex,nofollow");
 
   useEffect(() => {
     void fetchAuthConfig()
@@ -3783,8 +3801,8 @@ function DashboardPage() {
     canonicalPath: "/dashboard",
     title: "Document Vault | Term Craft",
     description: "Private Term Craft dashboard for saved contract drafts.",
+    robots: "noindex,nofollow",
   });
-  useRobotsMeta("noindex,nofollow");
 
   async function loadVault() {
     setIsLoading(true);
@@ -4189,8 +4207,8 @@ function AdminLeadsPage() {
     canonicalPath: "/admin/leads",
     title: "Lead Dashboard | Term Craft",
     description: "Internal lead dashboard for Term Craft.",
+    robots: "noindex,nofollow",
   });
-  useRobotsMeta("noindex,nofollow");
 
   function adminHeaders() {
     return adminKey ? { "x-admin-key": adminKey } : undefined;
@@ -4461,14 +4479,10 @@ function SeoTemplatePage({ config }: { config: SeoTemplateConfig }) {
   );
   const relatedTemplates = useMemo(() => getRelatedTemplates(config), [config]);
   const structuredData = useMemo(() => {
-    if (typeof window === "undefined") {
-      return null;
-    }
-
     return createTemplateStructuredData(
       config,
       relatedTemplates,
-      window.location.origin,
+      PUBLIC_SITE_ORIGIN,
     );
   }, [config, relatedTemplates]);
 
@@ -4476,6 +4490,7 @@ function SeoTemplatePage({ config }: { config: SeoTemplateConfig }) {
     canonicalPath: config.path,
     title: config.title,
     description: config.metaDescription,
+    ogType: "article",
   });
   useJsonLd(structuredData);
 
@@ -4885,6 +4900,7 @@ function B2BLeadGenerationRetainerPage() {
     title: "B2B Lead Generation Retainer Agreement Template | Free PDF",
     description:
       "Generate a free B2B lead generation retainer agreement PDF with setup fee, booked meeting commission, lead volume, and CRM access clauses.",
+    ogType: "article",
   });
 
   function updateForm<K extends keyof B2BLeadGenerationForm>(
@@ -5177,6 +5193,13 @@ function ContractBuilderApp() {
   const signedCount = signers.filter((signer) => signer.signedAt).length;
   const activeSigner =
     signers.find((signer) => signer.id === activeSignerId) ?? signers[0];
+
+  usePageMetadata({
+    canonicalPath: "/builder",
+    title: "Contract Studio | Term Craft",
+    description:
+      "Build, preview, sign, and download clean B2B contracts in the Term Craft contract studio.",
+  });
 
   useEffect(() => {
     const draft: StoredDraft = { contract, clauses, signers, auditEvents };
