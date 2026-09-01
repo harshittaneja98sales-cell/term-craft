@@ -205,6 +205,29 @@ export async function getDocument(userId, documentId) {
   );
 }
 
+export async function getDocumentBySigningTokenHash(tokenHash) {
+  if (!tokenHash) {
+    return null;
+  }
+
+  if (hasSupabaseConfig()) {
+    const params = new URLSearchParams({
+      select: "*",
+      limit: "1",
+      "template_values->>signingTokenHash": `eq.${tokenHash}`,
+    });
+    const rows = await supabaseRequest(`?${params.toString()}`);
+    return Array.isArray(rows) && rows[0] ? fromSupabaseDocument(rows[0]) : null;
+  }
+
+  const documents = await readLocalDocuments();
+  return (
+    documents.find(
+      (document) => document.templateValues?.signingTokenHash === tokenHash,
+    ) ?? null
+  );
+}
+
 export async function saveDocument(document) {
   if (hasSupabaseConfig()) {
     const rows = await supabaseRequest("?select=*", {
@@ -232,6 +255,46 @@ export async function saveDocument(document) {
   ].slice(0, 1000);
   await writeLocalDocuments(nextDocuments);
   return storedDocument;
+}
+
+export async function updateDocument(document) {
+  if (!document?.id || !document?.userId) {
+    throw new Error("Document id and user id are required.");
+  }
+
+  const timestamp = new Date().toISOString();
+  const nextDocument = {
+    ...document,
+    updatedAt: timestamp,
+  };
+
+  if (hasSupabaseConfig()) {
+    const rows = await supabaseRequest(
+      `?id=eq.${encodeFilter(document.id)}&user_id=eq.${encodeFilter(document.userId)}&select=*`,
+      {
+        method: "PATCH",
+        headers: { Prefer: "return=representation" },
+        body: JSON.stringify(toSupabaseDocument(nextDocument)),
+      },
+    );
+
+    return Array.isArray(rows) && rows[0]
+      ? fromSupabaseDocument(rows[0])
+      : nextDocument;
+  }
+
+  const documents = await readLocalDocuments();
+  const nextDocuments = documents.map((item) =>
+    item.id === document.id && item.userId === document.userId
+      ? nextDocument
+      : item,
+  );
+  await writeLocalDocuments(nextDocuments);
+  return (
+    nextDocuments.find(
+      (item) => item.id === document.id && item.userId === document.userId,
+    ) ?? nextDocument
+  );
 }
 
 export async function deleteDocument(userId, documentId) {

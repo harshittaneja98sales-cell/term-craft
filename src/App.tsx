@@ -241,6 +241,20 @@ type SaveVaultDocumentPayload = {
   templateValues?: Record<string, string>;
 };
 
+type SigningLinkInfo = {
+  expiresAt: string;
+  url: string;
+};
+
+type SigningLinkResponse = {
+  document: VaultDocument;
+  documentHash?: string;
+  link?: SigningLinkInfo;
+  recipientId?: Signer["id"];
+  status?: string;
+  storage?: DocumentStorageInfo;
+};
+
 type B2BLeadGenerationForm = {
   clientName: string;
   providerName: string;
@@ -1012,6 +1026,73 @@ async function saveVaultDocument(
     document: VaultDocument;
     storage: DocumentStorageInfo;
   }>;
+}
+
+async function createLiveSigningLink(
+  session: AuthSession,
+  payload: SaveVaultDocumentPayload,
+) {
+  const response = await fetch("/api/signing-links", {
+    body: JSON.stringify(payload),
+    headers: createAuthHeaders(session),
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Could not create signing link."));
+  }
+
+  return response.json() as Promise<SigningLinkResponse>;
+}
+
+async function fetchLiveSigningDocument(token: string) {
+  const response = await fetch(`/api/signing-links/${encodeURIComponent(token)}`);
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Could not load signing link."));
+  }
+
+  return response.json() as Promise<SigningLinkResponse>;
+}
+
+async function submitLiveCountersignature({
+  consent,
+  email,
+  name,
+  signatureDataUrl,
+  signatureMethod,
+  title,
+  token,
+}: {
+  consent: boolean;
+  email: string;
+  name: string;
+  signatureDataUrl: string;
+  signatureMethod: SignatureMethod;
+  title: string;
+  token: string;
+}) {
+  const response = await fetch(
+    `/api/signing-links/${encodeURIComponent(token)}/sign`,
+    {
+      body: JSON.stringify({
+        consent,
+        email,
+        name,
+        signatureDataUrl,
+        signatureMethod,
+        title,
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Could not apply signature."));
+  }
+
+  return response.json() as Promise<SigningLinkResponse>;
 }
 
 async function deleteVaultDocument(session: AuthSession, documentId: string) {
@@ -5437,6 +5518,11 @@ function ContractBuilderApp() {
   const [vaultSaveState, setVaultSaveState] =
     useState<"idle" | "saving" | "saved" | "error">("idle");
   const [vaultMessage, setVaultMessage] = useState("");
+  const [clientSigningLink, setClientSigningLink] =
+    useState<SigningLinkInfo | null>(null);
+  const [signingLinkState, setSigningLinkState] =
+    useState<"idle" | "creating" | "copied" | "error">("idle");
+  const [signingLinkMessage, setSigningLinkMessage] = useState("");
 
   const sections = useMemo(
     () => buildContractSections(contract, clauses),
@@ -5444,6 +5530,10 @@ function ContractBuilderApp() {
   );
   const status = getContractStatus(signers);
   const signedCount = signers.filter((signer) => signer.signedAt).length;
+  const providerSigner = signers.find((signer) => signer.id === "provider");
+  const canCreateClientSigningLink = Boolean(
+    providerSigner?.signedAt && providerSigner.signatureDataUrl,
+  );
   const activeSigner =
     signers.find((signer) => signer.id === activeSignerId) ?? signers[0];
 
@@ -5472,10 +5562,16 @@ function ContractBuilderApp() {
     key: K,
     value: ContractState[K],
   ) {
+    setClientSigningLink(null);
+    setSigningLinkMessage("");
+    setSigningLinkState("idle");
     setContract((current) => ({ ...current, [key]: value }));
   }
 
   function updateTemplate(template: TemplateKey) {
+    setClientSigningLink(null);
+    setSigningLinkMessage("");
+    setSigningLinkState("idle");
     setContract((current) => ({
       ...current,
       template,
@@ -5489,6 +5585,9 @@ function ContractBuilderApp() {
     key: K,
     value: Signer[K],
   ) {
+    setClientSigningLink(null);
+    setSigningLinkMessage("");
+    setSigningLinkState("idle");
     setSigners((current) =>
       current.map((signer) =>
         signer.id === signerId ? { ...signer, [key]: value } : signer,
@@ -5557,6 +5656,9 @@ function ContractBuilderApp() {
     setSigners(createDefaultSigners());
     setAuditEvents(createInitialAudit());
     setActiveSignerId("provider");
+    setClientSigningLink(null);
+    setSigningLinkMessage("");
+    setSigningLinkState("idle");
   }
 
   function signContract() {
@@ -5584,6 +5686,9 @@ function ContractBuilderApp() {
     );
     setPendingSignature(null);
     setConsentChecked(false);
+    setClientSigningLink(null);
+    setSigningLinkMessage("");
+    setSigningLinkState("idle");
   }
 
   function clearSignature(signerId: Signer["id"]) {
@@ -5605,16 +5710,84 @@ function ContractBuilderApp() {
       "Signature cleared",
       `${signer?.role ?? "Signer"} signature removed from draft.`,
     );
+    setClientSigningLink(null);
+    setSigningLinkMessage("");
+    setSigningLinkState("idle");
   }
 
-  async function copyInviteLink() {
-    const inviteUrl = `${window.location.href.split("#")[0]}#signing`;
+  async function copySigningUrl(url: string) {
     try {
-      await navigator.clipboard.writeText(inviteUrl);
-      addAudit("System", "Signing link copied", inviteUrl);
+      await navigator.clipboard.writeText(url);
+      setSigningLinkState("copied");
+      setSigningLinkMessage("Client signing link copied.");
     } catch {
-      addAudit("System", "Signing link prepared", inviteUrl);
+      setSigningLinkState("idle");
+      setSigningLinkMessage("Client signing link is ready. Copy it from the field below.");
     }
+  }
+
+  async function createClientSigningLink() {
+    setSigningLinkMessage("");
+
+    if (!canCreateClientSigningLink) {
+      setActiveSignerId("provider");
+      setSigningLinkState("error");
+      setSigningLinkMessage("Apply the provider signature first, then create the client link.");
+      return;
+    }
+
+    setSigningLinkState("creating");
+
+    try {
+      const session = await getUsableAuthSession();
+      if (!session) {
+        window.location.href = getLoginUrl("/builder");
+        return;
+      }
+
+      const linkEvent = createAuditEvent(
+        "System",
+        "Client signing link requested",
+        `${contract.customerName} will countersign through a secure live link.`,
+      );
+      const nextAuditEvents = [linkEvent, ...auditEvents];
+      const response = await createLiveSigningLink(session, {
+        auditEvents: nextAuditEvents,
+        clauses,
+        contract,
+        sections,
+        signers,
+        status: "Sent",
+        templatePath: "",
+        templateTitle: contract.contractTitle,
+        templateValues: { source: "contract-studio" },
+        title: createVaultDocumentTitle(contract),
+      });
+
+      if (!response.link?.url) {
+        throw new Error("Signing link was not returned.");
+      }
+
+      setAuditEvents(response.document.auditEvents?.length ? response.document.auditEvents : nextAuditEvents);
+      setClientSigningLink(response.link);
+      await copySigningUrl(response.link.url);
+    } catch (requestError) {
+      setSigningLinkState("error");
+      setSigningLinkMessage(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not create signing link.",
+      );
+    }
+  }
+
+  async function copyOrCreateClientSigningLink() {
+    if (clientSigningLink?.url) {
+      await copySigningUrl(clientSigningLink.url);
+      return;
+    }
+
+    await createClientSigningLink();
   }
 
   function printContract() {
@@ -6025,12 +6198,15 @@ function ContractBuilderApp() {
                   <input
                     checked={clauses[clause.key]}
                     type="checkbox"
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      setClientSigningLink(null);
+                      setSigningLinkMessage("");
+                      setSigningLinkState("idle");
                       setClauses((current) => ({
                         ...current,
                         [clause.key]: event.target.checked,
-                      }))
-                    }
+                      }));
+                    }}
                   />
                 </label>
               ))}
@@ -6140,12 +6316,42 @@ function ContractBuilderApp() {
             </div>
             <button
               className="button secondary full-width"
+              disabled={signingLinkState === "creating"}
               type="button"
-              onClick={copyInviteLink}
+              onClick={() => void copyOrCreateClientSigningLink()}
             >
               <Mail size={17} />
-              <span>Copy link</span>
+              <span>
+                {signingLinkState === "creating"
+                  ? "Creating link..."
+                  : clientSigningLink
+                    ? "Copy client link"
+                    : "Create client link"}
+              </span>
             </button>
+            {!canCreateClientSigningLink ? (
+              <small className="signing-link-hint">
+                Apply the Provider signature first.
+              </small>
+            ) : null}
+            {clientSigningLink ? (
+              <div className="signing-link-card">
+                <span>Client countersign link</span>
+                <input readOnly value={clientSigningLink.url} />
+                <small>
+                  Expires {formatTimestamp(clientSigningLink.expiresAt)}
+                </small>
+              </div>
+            ) : null}
+            {signingLinkMessage ? (
+              <div
+                className={`modal-status ${
+                  signingLinkState === "error" ? "local" : "success"
+                }`}
+              >
+                {signingLinkMessage}
+              </div>
+            ) : null}
           </section>
 
           <section className="panel signing-room">
@@ -6589,6 +6795,279 @@ function SignatureCapture({
   );
 }
 
+function SharedSigningPage({ token }: { token: string }) {
+  const [signingDocument, setSigningDocument] =
+    useState<VaultDocument | null>(null);
+  const [recipientId, setRecipientId] = useState<Signer["id"] | "">("");
+  const [signerName, setSignerName] = useState("");
+  const [signerTitle, setSignerTitle] = useState("");
+  const [signerEmail, setSignerEmail] = useState("");
+  const [pendingSignature, setPendingSignature] = useState<{
+    dataUrl: string;
+    method: SignatureMethod;
+  } | null>(null);
+  const [consentChecked, setConsentChecked] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const [documentHash, setDocumentHash] = useState("");
+
+  usePageMetadata({
+    canonicalPath: "/sign",
+    title: "Client Signature | Term Craft",
+    description: "Secure client countersignature page for a Term Craft document.",
+    robots: "noindex,nofollow",
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSigningLink() {
+      setIsLoading(true);
+      setError("");
+
+      try {
+        const response = await fetchLiveSigningDocument(token);
+        if (cancelled) {
+          return;
+        }
+
+        setSigningDocument(response.document);
+        setRecipientId(response.recipientId ?? "customer");
+      } catch (requestError) {
+        if (!cancelled) {
+          setError(
+            requestError instanceof Error
+              ? requestError.message
+              : "Could not load signing link.",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    if (token) {
+      void loadSigningLink();
+    } else {
+      setError("Invalid signing link.");
+      setIsLoading(false);
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  const recipientSigner =
+    signingDocument?.signers.find((signer) => signer.id === recipientId) ??
+    signingDocument?.signers.find((signer) => !signer.signedAt) ??
+    null;
+  const signingStatus = signingDocument
+    ? signingDocument.status || getContractStatus(signingDocument.signers)
+    : "Loading";
+  const alreadySigned = Boolean(recipientSigner?.signedAt);
+
+  useEffect(() => {
+    if (!recipientSigner) {
+      return;
+    }
+
+    setSignerName(recipientSigner.name || "");
+    setSignerTitle(recipientSigner.title || "");
+    setSignerEmail(recipientSigner.email || "");
+  }, [recipientSigner?.id, recipientSigner?.signedAt]);
+
+  async function submitSignature() {
+    setError("");
+    setMessage("");
+
+    if (!pendingSignature || !consentChecked) {
+      setError("Draw or type your signature and accept electronic signing consent.");
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const response = await submitLiveCountersignature({
+        consent: consentChecked,
+        email: signerEmail,
+        name: signerName,
+        signatureDataUrl: pendingSignature.dataUrl,
+        signatureMethod: pendingSignature.method,
+        title: signerTitle,
+        token,
+      });
+
+      setSigningDocument(response.document);
+      setDocumentHash(response.documentHash ?? "");
+      setPendingSignature(null);
+      setConsentChecked(false);
+      setMessage(
+        response.status === "already_signed"
+          ? "This document was already signed."
+          : "Signature applied. The sender can now see the countersigned document in their vault.",
+      );
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not apply signature.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function downloadSignedPdf() {
+    if (!signingDocument) {
+      return;
+    }
+
+    await downloadContractPdf(
+      signingDocument.contract,
+      signingDocument.sections,
+      signingDocument.signers,
+      signingDocument.status || getContractStatus(signingDocument.signers),
+    );
+  }
+
+  return (
+    <div className="public-page signing-link-page">
+      <PublicHeader />
+      <main className="shared-signing-shell">
+        <aside className="shared-signing-panel">
+          <div className="template-kicker">Client signing link</div>
+          <h1>Countersign this document</h1>
+          <p>
+            Review the agreement, sign electronically, and submit the
+            countersignature to the sender's live document vault.
+          </p>
+
+          {isLoading ? (
+            <div className="empty-state">Loading signing link...</div>
+          ) : null}
+
+          {error ? <div className="admin-alert">{error}</div> : null}
+          {message ? <div className="modal-status success">{message}</div> : null}
+
+          {signingDocument && recipientSigner ? (
+            <>
+              <div className="metric-grid signing-link-metrics">
+                <Metric label="Status" value={signingStatus} />
+                <Metric
+                  label="Signer"
+                  value={recipientSigner.role || "Client"}
+                />
+              </div>
+
+              {alreadySigned ? (
+                <div className="modal-status success">
+                  This signer has already completed the document.
+                </div>
+              ) : (
+                <>
+                  <div className="form-stack">
+                    <Field label="Name">
+                      <input
+                        value={signerName}
+                        onChange={(event) => setSignerName(event.target.value)}
+                      />
+                    </Field>
+                    <Field label="Title">
+                      <input
+                        value={signerTitle}
+                        onChange={(event) => setSignerTitle(event.target.value)}
+                      />
+                    </Field>
+                    <Field label="Email">
+                      <input
+                        type="email"
+                        value={signerEmail}
+                        onChange={(event) => setSignerEmail(event.target.value)}
+                      />
+                    </Field>
+                  </div>
+
+                  <SignatureCapture
+                    resetKey={`${recipientSigner.id}-${recipientSigner.signedAt ?? "open"}`}
+                    signerName={signerName}
+                    onSignatureChange={(dataUrl, method) =>
+                      setPendingSignature(
+                        dataUrl && method ? { dataUrl, method } : null,
+                      )
+                    }
+                  />
+
+                  <label className="consent-row">
+                    <input
+                      checked={consentChecked}
+                      type="checkbox"
+                      onChange={(event) =>
+                        setConsentChecked(event.target.checked)
+                      }
+                    />
+                    <span>
+                      I agree to sign electronically as {signerName || "the signer"}.
+                    </span>
+                  </label>
+
+                  <button
+                    className="button primary full-width"
+                    disabled={isSubmitting || !pendingSignature || !consentChecked}
+                    type="button"
+                    onClick={() => void submitSignature()}
+                  >
+                    <PenLine size={17} />
+                    <span>{isSubmitting ? "Submitting..." : "Submit Signature"}</span>
+                  </button>
+                </>
+              )}
+
+              {documentHash ? (
+                <div className="signing-link-card">
+                  <span>Document hash</span>
+                  <input readOnly value={documentHash} />
+                </div>
+              ) : null}
+
+              <button
+                className="button secondary full-width"
+                type="button"
+                onClick={() => void downloadSignedPdf()}
+              >
+                <Download size={17} />
+                <span>Download PDF</span>
+              </button>
+            </>
+          ) : null}
+        </aside>
+
+        <section className="shared-signing-preview">
+          {signingDocument ? (
+            <ContractDocument
+              auditEvents={signingDocument.auditEvents}
+              contract={signingDocument.contract}
+              sections={signingDocument.sections}
+              signers={signingDocument.signers}
+              status={signingStatus}
+            />
+          ) : (
+            <div className="empty-state">
+              The document preview will appear after the link loads.
+            </div>
+          )}
+        </section>
+      </main>
+      <PublicFooter />
+    </div>
+  );
+}
+
 function App() {
   const pathname = window.location.pathname.replace(/\/$/, "");
   const seoTemplateConfig = seoTemplateConfigs[pathname];
@@ -6596,7 +7075,11 @@ function App() {
   const analyticsTemplateTitle = seoTemplateConfig?.contractTitle ?? "";
 
   useEffect(() => {
-    if (pathname.startsWith("/admin")) {
+    if (
+      pathname.startsWith("/admin") ||
+      pathname === "/sign" ||
+      pathname.startsWith("/sign/")
+    ) {
       return;
     }
 
@@ -6616,6 +7099,14 @@ function App() {
 
   if (pathname === "/builder") {
     return <ContractBuilderApp />;
+  }
+
+  if (pathname === "/sign" || pathname.startsWith("/sign/")) {
+    const token =
+      pathname === "/sign"
+        ? ""
+        : decodeURIComponent(pathname.replace(/^\/sign\//, ""));
+    return <SharedSigningPage token={token} />;
   }
 
   if (pathname === "/login") {

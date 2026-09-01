@@ -1035,6 +1035,114 @@ button:focus-visible {
   line-height: 1.45;
 }
 
+.signing-link-hint {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.signing-link-card {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-alt);
+  padding: 10px;
+}
+
+.signing-link-card span,
+.signing-link-card small,
+.signing-link-card input {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.signing-link-card span {
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.signing-link-card input {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
+.signing-link-card small {
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.signing-link-page {
+  background: var(--bg-alt);
+}
+
+.shared-signing-shell {
+  display: grid;
+  grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.shared-signing-panel,
+.shared-signing-preview {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: var(--shadow-sm);
+}
+
+.shared-signing-panel {
+  position: sticky;
+  top: 94px;
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+}
+
+.shared-signing-panel h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.08;
+}
+
+.shared-signing-panel p {
+  margin: 0;
+  color: var(--ink-secondary);
+  font-size: 14.5px;
+  line-height: 1.65;
+}
+
+.shared-signing-preview {
+  overflow: hidden;
+  padding: 18px;
+}
+
+.shared-signing-preview .document {
+  width: 100%;
+  box-shadow: none;
+}
+
+.signing-link-metrics {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .signature-actions {
   align-items: stretch;
   flex-direction: column;
@@ -2731,6 +2839,15 @@ button:focus-visible {
 
   .vault-layout {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .shared-signing-shell {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 14px;
+  }
+
+  .shared-signing-panel {
+    position: static;
   }
 
   .vault-actions {

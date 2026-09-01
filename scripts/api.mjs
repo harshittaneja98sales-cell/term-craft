@@ -1,11 +1,13 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { sendEditableVersionEmail } from "./email-service.mjs";
 import {
   deleteDocument,
   getDocument,
+  getDocumentBySigningTokenHash,
   getDocumentStorageInfo,
   listDocuments,
   saveDocument,
+  updateDocument,
 } from "./document-store.mjs";
 import {
   createBillingPortalSession,
@@ -301,6 +303,121 @@ function createDocumentFromRequest(req, user) {
   };
 }
 
+function cleanSigningToken(value) {
+  const token = cleanString(value, 160);
+  return /^[a-zA-Z0-9_-]{24,160}$/.test(token) ? token : "";
+}
+
+function createSigningToken() {
+  return randomBytes(32).toString("base64url");
+}
+
+function hashSigningToken(token) {
+  return createHash("sha256").update(token).digest("hex");
+}
+
+function getSiteUrl(req) {
+  if (process.env.SITE_URL) {
+    return process.env.SITE_URL.replace(/\/$/, "");
+  }
+
+  const protocol = cleanString(req.get("x-forwarded-proto"), 20) || req.protocol || "https";
+  const host = cleanString(req.get("host"), 240);
+  return `${protocol}://${host}`.replace(/\/$/, "");
+}
+
+function getRequestIp(req) {
+  const forwardedFor = cleanString(req.get("x-forwarded-for"), 500);
+  return forwardedFor.split(",")[0]?.trim() || cleanString(req.ip, 80) || "unknown";
+}
+
+function createAuditRecord(actor, action, details) {
+  return {
+    id: randomUUID(),
+    actor: cleanString(actor, 180),
+    action: cleanString(action, 180),
+    details: cleanString(details, 1000),
+    at: new Date().toISOString(),
+  };
+}
+
+function getDocumentSigningStatus(signers, fallback = "Draft") {
+  const signerList = Array.isArray(signers) ? signers : [];
+  const signedCount = signerList.filter((signer) => signer?.signedAt).length;
+
+  if (signedCount === 0) {
+    return fallback;
+  }
+
+  if (signedCount === signerList.length) {
+    return "Executed";
+  }
+
+  return fallback === "Sent" || fallback === "Viewed" ? fallback : "Partially signed";
+}
+
+function createDocumentHash(document) {
+  const snapshot = {
+    contract: document.contract,
+    sections: document.sections,
+    signers: document.signers,
+    status: document.status,
+  };
+
+  return createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
+}
+
+function getSigningRecipientId(document) {
+  return cleanString(document?.templateValues?.signingRecipientId, 80) || "customer";
+}
+
+function isSigningLinkExpired(document) {
+  const expiresAt = cleanString(document?.templateValues?.signingExpiresAt, 80);
+
+  if (!expiresAt) {
+    return false;
+  }
+
+  const expires = Date.parse(expiresAt);
+  return Number.isFinite(expires) && expires < Date.now();
+}
+
+function sanitizeSharedDocument(document) {
+  const { signingTokenHash, ...safeTemplateValues } = document.templateValues ?? {};
+
+  return {
+    ...document,
+    userId: "",
+    templateValues: safeTemplateValues,
+  };
+}
+
+async function loadSigningDocument(token) {
+  const cleanedToken = cleanSigningToken(token);
+
+  if (!cleanedToken) {
+    const error = new Error("Invalid signing link.");
+    error.status = 400;
+    throw error;
+  }
+
+  const document = await getDocumentBySigningTokenHash(hashSigningToken(cleanedToken));
+
+  if (!document) {
+    const error = new Error("Signing link not found.");
+    error.status = 404;
+    throw error;
+  }
+
+  if (isSigningLinkExpired(document)) {
+    const error = new Error("This signing link has expired.");
+    error.status = 410;
+    throw error;
+  }
+
+  return document;
+}
+
 function sendApiError(res, error) {
   const status = Number(error?.status ?? 500);
   res.status(status >= 400 && status < 600 ? status : 500).json({
@@ -547,6 +664,214 @@ export function registerApiRoutes(app) {
         occurredAt: new Date().toISOString(),
       });
       res.status(201).json({ document, storage: getDocumentStorageInfo() });
+    } catch (error) {
+      sendApiError(res, error);
+    }
+  });
+
+  app.post("/api/signing-links", async (req, res) => {
+    try {
+      const user = await authenticateRequest(req);
+      const result = createDocumentFromRequest(req, user);
+      if (result.error) {
+        res.status(result.error.status).json(result.error.payload);
+        return;
+      }
+
+      const providerSigner = result.document.signers.find(
+        (signer) => signer?.id === "provider",
+      );
+
+      if (!providerSigner?.signedAt || !providerSigner?.signatureDataUrl) {
+        res.status(400).json({
+          error: "Apply the provider signature before creating a client signing link.",
+        });
+        return;
+      }
+
+      const token = createSigningToken();
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const document = {
+        ...result.document,
+        status: "Sent",
+        templateValues: {
+          ...(result.document.templateValues ?? {}),
+          signingCreatedAt: now.toISOString(),
+          signingExpiresAt: expiresAt,
+          signingRecipientId: "customer",
+          signingStatus: "sent",
+          signingTokenHash: hashSigningToken(token),
+        },
+        auditEvents: [
+          createAuditRecord(
+            user.email || "Sender",
+            "Client signing link created",
+            `Signing link created for ${result.document.contract?.customerName ?? "client"} and expires ${expiresAt}.`,
+          ),
+          ...(Array.isArray(result.document.auditEvents) ? result.document.auditEvents : []),
+        ],
+      };
+
+      const savedDocument = await saveDocument(document);
+      const url = `${getSiteUrl(req)}/sign/${token}`;
+
+      await saveAnalyticsEvent({
+        id: randomUUID(),
+        eventName: "signing_link_created",
+        path: cleanString(req.body?.templatePath, 240) || "/builder",
+        templateTitle: cleanString(req.body?.templateTitle, 160),
+        templatePath: cleanString(req.body?.templatePath, 240),
+        referrer: cleanString(req.get("referer"), 500),
+        utmSource: "",
+        utmMedium: "",
+        utmCampaign: "",
+        utmTerm: "",
+        utmContent: "",
+        metadata: { documentId: savedDocument.id, userId: user.id },
+        userAgent: cleanString(req.get("user-agent"), 500),
+        occurredAt: new Date().toISOString(),
+      });
+
+      res.status(201).json({
+        document: sanitizeSharedDocument(savedDocument),
+        link: {
+          expiresAt,
+          url,
+        },
+        storage: getDocumentStorageInfo(),
+      });
+    } catch (error) {
+      sendApiError(res, error);
+    }
+  });
+
+  app.get("/api/signing-links/:token", async (req, res) => {
+    try {
+      const document = await loadSigningDocument(req.params.token);
+      res.json({
+        document: sanitizeSharedDocument(document),
+        recipientId: getSigningRecipientId(document),
+      });
+    } catch (error) {
+      sendApiError(res, error);
+    }
+  });
+
+  app.post("/api/signing-links/:token/sign", async (req, res) => {
+    try {
+      const document = await loadSigningDocument(req.params.token);
+      const body = req.body ?? {};
+      const recipientId = getSigningRecipientId(document);
+      const signerName = cleanString(body.name, 160);
+      const signerTitle = cleanString(body.title, 160);
+      const signerEmail = cleanString(body.email, 254).toLowerCase();
+      const signatureDataUrl = cleanString(body.signatureDataUrl, 700000);
+      const signatureMethod = cleanString(body.signatureMethod, 40);
+      const consent = Boolean(body.consent);
+
+      if (!signerName || !emailPattern.test(signerEmail)) {
+        res.status(400).json({ error: "Signer name and valid email are required." });
+        return;
+      }
+
+      if (!consent || !signatureDataUrl) {
+        res.status(400).json({ error: "Electronic signature consent and signature are required." });
+        return;
+      }
+
+      if (!["drawn", "typed"].includes(signatureMethod)) {
+        res.status(400).json({ error: "Invalid signature method." });
+        return;
+      }
+
+      if (
+        !signatureDataUrl.startsWith("data:image/png") &&
+        !signatureDataUrl.startsWith("data:image/svg+xml")
+      ) {
+        res.status(400).json({ error: "Invalid signature format." });
+        return;
+      }
+
+      const signerIndex = document.signers.findIndex(
+        (signer) => signer?.id === recipientId,
+      );
+
+      if (signerIndex === -1) {
+        res.status(400).json({ error: "Signing recipient is not available." });
+        return;
+      }
+
+      if (document.signers[signerIndex]?.signedAt) {
+        res.json({
+          document: sanitizeSharedDocument(document),
+          status: "already_signed",
+        });
+        return;
+      }
+
+      const signedAt = new Date().toISOString();
+      const nextSigners = document.signers.map((signer, index) =>
+        index === signerIndex
+          ? {
+              ...signer,
+              email: signerEmail,
+              name: signerName,
+              signedAt,
+              signatureDataUrl,
+              signatureMethod,
+              title: signerTitle || signer.title || signer.role,
+            }
+          : signer,
+      );
+      const nextStatus = getDocumentSigningStatus(nextSigners, "Sent");
+      const nextDocumentSnapshot = {
+        ...document,
+        signers: nextSigners,
+        status: nextStatus,
+      };
+      const documentHash = createDocumentHash(nextDocumentSnapshot);
+      const nextDocument = {
+        ...nextDocumentSnapshot,
+        auditEvents: [
+          createAuditRecord(
+            signerEmail,
+            "Client countersigned",
+            `Signed from ${getRequestIp(req)} using ${cleanString(req.get("user-agent"), 240)}. Document SHA-256: ${documentHash}.`,
+          ),
+          ...(Array.isArray(document.auditEvents) ? document.auditEvents : []),
+        ],
+        templateValues: {
+          ...(document.templateValues ?? {}),
+          signingCompletedAt: nextStatus === "Executed" ? signedAt : "",
+          signingStatus: nextStatus === "Executed" ? "signed" : "partially_signed",
+        },
+      };
+
+      const savedDocument = await updateDocument(nextDocument);
+
+      await saveAnalyticsEvent({
+        id: randomUUID(),
+        eventName: "document_countersigned",
+        path: "/sign",
+        templateTitle: cleanString(document.templateTitle, 160),
+        templatePath: cleanString(document.templatePath, 240),
+        referrer: cleanString(req.get("referer"), 500),
+        utmSource: "",
+        utmMedium: "",
+        utmCampaign: "",
+        utmTerm: "",
+        utmContent: "",
+        metadata: { documentHash, documentId: document.id },
+        userAgent: cleanString(req.get("user-agent"), 500),
+        occurredAt: signedAt,
+      });
+
+      res.json({
+        document: sanitizeSharedDocument(savedDocument),
+        documentHash,
+        status: "signed",
+      });
     } catch (error) {
       sendApiError(res, error);
     }
