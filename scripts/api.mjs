@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { createClient } from "@supabase/supabase-js";
 import { sendEditableVersionEmail } from "./email-service.mjs";
 import {
   deleteDocument,
@@ -33,6 +34,12 @@ const supabaseAuthKey =
   process.env.SUPABASE_PUBLISHABLE_KEY?.trim() ||
   process.env.SUPABASE_ANON_KEY?.trim() ||
   "";
+const supabaseServiceKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
+  process.env.SUPABASE_SERVICE_KEY?.trim() ||
+  process.env.SUPABASE_SECRET_KEY?.trim() ||
+  "";
+let supabaseAdminClient = null;
 
 function cleanString(value, maxLength = 500) {
   return String(value ?? "").trim().slice(0, maxLength);
@@ -88,6 +95,29 @@ function isAdminAuthorized(req) {
 
 function hasAuthConfig() {
   return Boolean(supabaseUrl && supabaseAuthKey);
+}
+
+function hasSupabaseAdminConfig() {
+  return Boolean(supabaseUrl && supabaseServiceKey);
+}
+
+function getSupabaseAdminClient() {
+  if (!hasSupabaseAdminConfig()) {
+    const error = new Error("Supabase admin access is not configured.");
+    error.status = 503;
+    throw error;
+  }
+
+  if (!supabaseAdminClient) {
+    supabaseAdminClient = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
+  }
+
+  return supabaseAdminClient;
 }
 
 function normalizeSupabaseUser(user) {
@@ -153,6 +183,31 @@ async function supabaseAuthRequest(path, options = {}) {
   }
 
   return data;
+}
+
+async function findSupabaseAuthUserByEmail(email) {
+  const supabase = getSupabaseAdminClient();
+  const perPage = 1000;
+
+  for (let page = 1; page <= 20; page += 1) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage });
+
+    if (error) {
+      error.status = error.status ?? 502;
+      throw error;
+    }
+
+    const users = data?.users ?? [];
+    const user = users.find(
+      (candidate) => cleanString(candidate?.email, 254).toLowerCase() === email,
+    );
+
+    if (user || users.length < perPage) {
+      return user ?? null;
+    }
+  }
+
+  return null;
 }
 
 function getBearerToken(req) {
@@ -533,6 +588,45 @@ export function registerApiRoutes(app) {
       );
 
       res.json({ ok: true });
+    } catch (error) {
+      sendApiError(res, error);
+    }
+  });
+
+  app.post("/api/admin/auth/confirm-user", async (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) {
+        return;
+      }
+
+      const email = cleanString(req.body?.email, 254).toLowerCase();
+
+      if (!emailPattern.test(email)) {
+        res.status(400).json({ error: "Enter a valid email address." });
+        return;
+      }
+
+      const user = await findSupabaseAuthUserByEmail(email);
+
+      if (!user?.id) {
+        res.status(404).json({ error: "User not found." });
+        return;
+      }
+
+      const supabase = getSupabaseAdminClient();
+      const { data, error } = await supabase.auth.admin.updateUserById(user.id, {
+        email_confirm: true,
+      });
+
+      if (error) {
+        error.status = error.status ?? 502;
+        throw error;
+      }
+
+      res.json({
+        confirmed: true,
+        user: normalizeSupabaseUser(data?.user ?? user),
+      });
     } catch (error) {
       sendApiError(res, error);
     }
