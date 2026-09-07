@@ -326,6 +326,15 @@ function getSiteUrl(req) {
   return `${protocol}://${host}`.replace(/\/$/, "");
 }
 
+function getAuthRedirectPath(req) {
+  return `${getSiteUrl(req)}/dashboard`;
+}
+
+function createRedirectPath(path, redirectTo) {
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}redirect_to=${encodeURIComponent(redirectTo)}`;
+}
+
 function getRequestIp(req) {
   const forwardedFor = cleanString(req.get("x-forwarded-for"), 500);
   return forwardedFor.split(",")[0]?.trim() || cleanString(req.ip, 80) || "unknown";
@@ -488,16 +497,42 @@ export function registerApiRoutes(app) {
         return;
       }
 
-      const payload = await supabaseAuthRequest("/signup", {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-      });
+      const payload = await supabaseAuthRequest(
+        createRedirectPath("/signup", getAuthRedirectPath(req)),
+        {
+          method: "POST",
+          body: JSON.stringify({ email, password }),
+        },
+      );
       const session = normalizeSupabaseSession(payload);
       res.status(201).json({
         session,
         user: normalizeSupabaseUser(payload?.user),
         confirmationRequired: !session,
       });
+    } catch (error) {
+      sendApiError(res, error);
+    }
+  });
+
+  app.post("/api/auth/resend-confirmation", async (req, res) => {
+    try {
+      const email = cleanString(req.body?.email, 254).toLowerCase();
+
+      if (!emailPattern.test(email)) {
+        res.status(400).json({ error: "Enter a valid email address." });
+        return;
+      }
+
+      await supabaseAuthRequest(
+        createRedirectPath("/resend", getAuthRedirectPath(req)),
+        {
+          method: "POST",
+          body: JSON.stringify({ email, type: "signup" }),
+        },
+      );
+
+      res.json({ ok: true });
     } catch (error) {
       sendApiError(res, error);
     }

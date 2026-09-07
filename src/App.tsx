@@ -891,6 +891,22 @@ async function requestEmailAuth(
   return response.json() as Promise<AuthResponse>;
 }
 
+async function requestConfirmationResend(email: string) {
+  const response = await fetch("/api/auth/resend-confirmation", {
+    body: JSON.stringify({ email }),
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      await readApiError(response, "Could not resend confirmation email."),
+    );
+  }
+
+  return response.json() as Promise<{ ok: boolean }>;
+}
+
 async function refreshAuthSession(refreshToken: string) {
   const response = await fetch("/api/auth/refresh", {
     body: JSON.stringify({ refreshToken }),
@@ -4176,6 +4192,8 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [authEnabled, setAuthEnabled] = useState<boolean | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [canResendConfirmation, setCanResendConfirmation] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -4196,6 +4214,7 @@ function AuthPage() {
     event.preventDefault();
     setError("");
     setMessage("");
+    setCanResendConfirmation(false);
     setIsSubmitting(true);
 
     try {
@@ -4209,20 +4228,55 @@ function AuthPage() {
 
       if (response.confirmationRequired) {
         setMessage("Check your email to confirm the account, then sign in.");
+        setCanResendConfirmation(true);
         setMode("login");
       } else {
         setMessage("Account created. You can sign in now.");
         setMode("login");
       }
     } catch (requestError) {
-      setError(
+      const nextError =
         requestError instanceof Error
           ? requestError.message
-          : "Authentication failed.",
-      );
+          : "Authentication failed.";
+      setError(nextError);
+      setCanResendConfirmation(/confirm|verified|verification/i.test(nextError));
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  async function handleResendConfirmation() {
+    setError("");
+    setMessage("");
+
+    if (!email.trim()) {
+      setError("Enter your email address first.");
+      return;
+    }
+
+    setIsResending(true);
+
+    try {
+      await requestConfirmationResend(email);
+      setMessage("Confirmation email sent. Check your inbox and spam folder, then sign in.");
+      setCanResendConfirmation(true);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not resend confirmation email.",
+      );
+    } finally {
+      setIsResending(false);
+    }
+  }
+
+  function changeMode(nextMode: "login" | "signup") {
+    setMode(nextMode);
+    setError("");
+    setMessage("");
+    setCanResendConfirmation(false);
   }
 
   return (
@@ -4243,14 +4297,14 @@ function AuthPage() {
             <button
               className={mode === "login" ? "active" : ""}
               type="button"
-              onClick={() => setMode("login")}
+              onClick={() => changeMode("login")}
             >
               Sign In
             </button>
             <button
               className={mode === "signup" ? "active" : ""}
               type="button"
-              onClick={() => setMode("signup")}
+              onClick={() => changeMode("signup")}
             >
               Create Account
             </button>
@@ -4299,6 +4353,18 @@ function AuthPage() {
               </span>
             </button>
           </form>
+
+          {canResendConfirmation ? (
+            <button
+              className="button secondary full-width auth-resend-button"
+              disabled={isSubmitting || isResending}
+              type="button"
+              onClick={handleResendConfirmation}
+            >
+              <Mail size={17} />
+              <span>{isResending ? "Sending..." : "Resend confirmation email"}</span>
+            </button>
+          ) : null}
 
           {message ? <div className="modal-status success">{message}</div> : null}
           {error ? <div className="admin-alert">{error}</div> : null}
