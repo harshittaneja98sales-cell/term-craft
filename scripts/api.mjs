@@ -632,6 +632,49 @@ export function registerApiRoutes(app) {
     }
   });
 
+  app.post("/api/admin/auth/reset-password", async (req, res) => {
+    try {
+      if (!requireAdmin(req, res)) {
+        return;
+      }
+
+      const email = cleanString(req.body?.email, 254).toLowerCase();
+      const password = cleanString(req.body?.password, 200);
+
+      if (!emailPattern.test(email) || password.length < 8) {
+        res.status(400).json({
+          error: "Enter a valid email and a password with at least 8 characters.",
+        });
+        return;
+      }
+
+      const user = await findSupabaseAuthUserByEmail(email);
+
+      if (!user?.id) {
+        res.status(404).json({ error: "User not found." });
+        return;
+      }
+
+      const supabase = getSupabaseAdminClient();
+      const { data, error } = await supabase.auth.admin.updateUserById(user.id, {
+        email_confirm: true,
+        password,
+      });
+
+      if (error) {
+        error.status = error.status ?? 502;
+        throw error;
+      }
+
+      res.json({
+        passwordUpdated: true,
+        user: normalizeSupabaseUser(data?.user ?? user),
+      });
+    } catch (error) {
+      sendApiError(res, error);
+    }
+  });
+
   app.post("/api/auth/login", async (req, res) => {
     try {
       const email = cleanString(req.body?.email, 254).toLowerCase();
