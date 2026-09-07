@@ -1862,6 +1862,32 @@ button:focus-visible {
   gap: 12px;
 }
 
+.create-document-modal {
+  width: min(100%, 720px);
+}
+
+.create-document-form {
+  display: grid;
+  gap: 14px;
+}
+
+.create-document-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.create-document-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.vault-empty-create {
+  margin-top: 12px;
+}
+
 .modal-status {
   border-radius: 10px;
   font-size: 13.5px;
@@ -2916,8 +2942,14 @@ button:focus-visible {
   }
 
   .admin-key-form,
-  .admin-analytics-grid {
+  .admin-analytics-grid,
+  .create-document-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .create-document-actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .post-download-modal {

@@ -7,6 +7,7 @@ import {
   Database,
   Download,
   FileCheck2,
+  FilePlus2,
   FileText,
   FolderOpen,
   KeyRound,
@@ -239,6 +240,16 @@ type SaveVaultDocumentPayload = {
   clauses?: Partial<Record<ClauseKey, boolean>>;
   auditEvents?: AuditEvent[];
   templateValues?: Record<string, string>;
+};
+
+type DashboardCreateForm = {
+  clientName: string;
+  effectiveDate: string;
+  feeAmount: string;
+  providerName: string;
+  scopeOfWork: string;
+  source: string;
+  title: string;
 };
 
 type SigningLinkInfo = {
@@ -1139,6 +1150,189 @@ function openDocumentInStudio(document: VaultDocument) {
 
 function createVaultDocumentTitle(contract: ContractState) {
   return `${contract.contractTitle} - ${contract.customerName || "Client"}`;
+}
+
+function createDefaultDashboardCreateForm(): DashboardCreateForm {
+  const contract = createDefaultContract();
+
+  return {
+    clientName: contract.customerName,
+    effectiveDate: contract.effectiveDate,
+    feeAmount: contract.feeAmount,
+    providerName: contract.providerName,
+    scopeOfWork: contract.serviceName,
+    source: "core:services",
+    title: "",
+  };
+}
+
+function findTemplateValueKey(
+  config: SeoTemplateConfig,
+  matcher: RegExp,
+  fallback = "",
+) {
+  return config.fields.find((field) => matcher.test(field.key))?.key ?? fallback;
+}
+
+function createCoreDocumentPayload(
+  form: DashboardCreateForm,
+  templateKey: TemplateKey,
+): SaveVaultDocumentPayload {
+  const templateDefaultsForKey = templateDefaults[templateKey];
+  const contract: ContractState = {
+    ...createDefaultContract(),
+    template: templateKey,
+    ...templateDefaultsForKey,
+    customerName: form.clientName,
+    effectiveDate: form.effectiveDate,
+    feeAmount: form.feeAmount,
+    providerName: form.providerName,
+    serviceName: form.scopeOfWork,
+  };
+  const signers = createDefaultSigners().map((signer) =>
+    signer.id === "provider"
+      ? {
+          ...signer,
+          email: "",
+          name: form.providerName,
+          title: "Authorized Representative",
+        }
+      : {
+          ...signer,
+          email: "",
+          name: form.clientName,
+          title: "Authorized Representative",
+        },
+  );
+  const clauses = normalizeClauses();
+  const auditEvents = [
+    createAuditEvent(
+      "System",
+      "Document created",
+      "Created from the vault create document flow.",
+    ),
+  ];
+
+  return {
+    auditEvents,
+    clauses,
+    contract,
+    sections: buildContractSections(contract, clauses),
+    signers,
+    status: "Draft",
+    templatePath: "",
+    templateTitle: contract.contractTitle,
+    templateValues: {
+      createSource: `core:${templateKey}`,
+      source: "vault-create",
+    },
+    title: form.title.trim() || createVaultDocumentTitle(contract),
+  };
+}
+
+function createSeoTemplateDocumentPayload(
+  form: DashboardCreateForm,
+  config: SeoTemplateConfig,
+): SaveVaultDocumentPayload {
+  const values = { ...config.defaultValues };
+  values[config.clientNameKey] = form.clientName;
+  values[config.providerNameKey] = form.providerName;
+
+  const dateKey = findTemplateValueKey(
+    config,
+    /(^|_)(start|effective|delivery|expiration)?date$/i,
+    "startDate",
+  );
+  if (dateKey) {
+    values[dateKey] = form.effectiveDate;
+  }
+
+  const feeKey = findTemplateValueKey(
+    config,
+    /fee|amount|retainer|payment|price|rate|commission|compensation|deposit/i,
+  );
+  if (feeKey) {
+    values[feeKey] = form.feeAmount;
+  }
+
+  const scopeKey = findTemplateValueKey(
+    config,
+    /scope|deliverables|services|work|description|responsibilities/i,
+  );
+  if (scopeKey) {
+    values[scopeKey] = form.scopeOfWork;
+  }
+
+  const baseContract = config.createContract(values);
+  const contract: ContractState = {
+    ...baseContract,
+    customerName: form.clientName,
+    effectiveDate: form.effectiveDate,
+    feeAmount: form.feeAmount || baseContract.feeAmount,
+    providerName: form.providerName,
+    serviceName: form.scopeOfWork || baseContract.serviceName,
+  };
+  const signers: Signer[] = [
+    {
+      id: "provider",
+      role: "Provider",
+      name: form.providerName,
+      title: "Authorized Representative",
+      email: "",
+    },
+    {
+      id: "customer",
+      role: "Customer",
+      name: form.clientName,
+      title: "Authorized Representative",
+      email: "",
+    },
+  ];
+  const auditEvents = [
+    createAuditEvent(
+      "System",
+      "Document created",
+      `Created from ${config.contractTitle}.`,
+    ),
+  ];
+
+  return {
+    auditEvents,
+    clauses: {},
+    contract,
+    sections: config.buildSections(contract, values),
+    signers,
+    status: "Draft",
+    templatePath: config.path,
+    templateTitle: config.contractTitle,
+    templateValues: {
+      ...values,
+      createSource: config.path,
+      source: "vault-create",
+    },
+    title: form.title.trim() || createVaultDocumentTitle(contract),
+  };
+}
+
+function createDashboardDocumentPayload(
+  form: DashboardCreateForm,
+): SaveVaultDocumentPayload {
+  if (form.source.startsWith("template:")) {
+    const templatePath = form.source.replace(/^template:/, "");
+    const templateConfig = seoTemplateConfigs[templatePath];
+
+    if (templateConfig) {
+      return createSeoTemplateDocumentPayload(form, templateConfig);
+    }
+  }
+
+  const templateKey = form.source.replace(/^core:/, "") as TemplateKey;
+  return createCoreDocumentPayload(
+    form,
+    contractTemplates.some((template) => template.key === templateKey)
+      ? templateKey
+      : "services",
+  );
 }
 
 function isPaidBillingStatus(billing: BillingStatus | null) {
@@ -4126,6 +4320,14 @@ function DashboardPage() {
   const [selectedId, setSelectedId] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isBillingRedirecting, setIsBillingRedirecting] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [createForm, setCreateForm] = useState<DashboardCreateForm>(
+    createDefaultDashboardCreateForm,
+  );
+  const [createState, setCreateState] = useState<
+    "idle" | "saving" | "opening" | "error"
+  >("idle");
+  const [createMessage, setCreateMessage] = useState("");
   const [error, setError] = useState("");
 
   const selectedDocument =
@@ -4235,6 +4437,67 @@ function DashboardPage() {
     }
   }
 
+  function openCreateDocumentModal() {
+    setCreateForm(createDefaultDashboardCreateForm());
+    setCreateState("idle");
+    setCreateMessage("");
+    setIsCreateModalOpen(true);
+  }
+
+  function updateCreateForm<K extends keyof DashboardCreateForm>(
+    key: K,
+    value: DashboardCreateForm[K],
+  ) {
+    setCreateForm((current) => ({ ...current, [key]: value }));
+  }
+
+  async function createVaultDocument(openInStudio = false) {
+    if (
+      !createForm.clientName.trim() ||
+      !createForm.providerName.trim() ||
+      !createForm.effectiveDate
+    ) {
+      setCreateState("error");
+      setCreateMessage("Client name, service provider, and start date are required.");
+      return;
+    }
+
+    setCreateState(openInStudio ? "opening" : "saving");
+    setCreateMessage("");
+    setError("");
+
+    try {
+      const activeSession = await getUsableAuthSession();
+      if (!activeSession) {
+        window.location.href = getLoginUrl("/dashboard");
+        return;
+      }
+
+      setSession(activeSession);
+      const payload = createDashboardDocumentPayload(createForm);
+      const response = await saveVaultDocument(activeSession, payload);
+      setStorage(response.storage);
+      setDocuments((current) => [
+        response.document,
+        ...current.filter((document) => document.id !== response.document.id),
+      ]);
+      setSelectedId(response.document.id);
+      setCreateMessage("Document created.");
+      setIsCreateModalOpen(false);
+
+      if (openInStudio) {
+        openDocumentInStudio(response.document);
+      }
+    } catch (requestError) {
+      setCreateState("error");
+      setCreateMessage(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not create document.",
+      );
+    }
+  }
+
   useEffect(() => {
     void loadVault();
   }, []);
@@ -4279,6 +4542,14 @@ function DashboardPage() {
             </p>
           </div>
           <div className="admin-actions">
+            <button
+              className="button primary"
+              type="button"
+              onClick={openCreateDocumentModal}
+            >
+              <FilePlus2 size={17} />
+              <span>Create Document</span>
+            </button>
             <a className="button secondary" href="/templates">
               <FileText size={17} />
               <span>Templates</span>
@@ -4364,7 +4635,15 @@ function DashboardPage() {
             ) : documents.length === 0 ? (
               <div className="empty-state">
                 No documents saved yet. Open a template, fill the form, and
-                click Save to Vault.
+                click Save to Vault, or create a document here.
+                <button
+                  className="button primary full-width vault-empty-create"
+                  type="button"
+                  onClick={openCreateDocumentModal}
+                >
+                  <FilePlus2 size={17} />
+                  <span>Create Document</span>
+                </button>
               </div>
             ) : (
               <div className="vault-document-list">
@@ -4449,7 +4728,197 @@ function DashboardPage() {
           </section>
         </section>
       </main>
+      <CreateDocumentModal
+        createForm={createForm}
+        createState={createState}
+        isOpen={isCreateModalOpen}
+        message={createMessage}
+        onChange={updateCreateForm}
+        onClose={() => {
+          setIsCreateModalOpen(false);
+          setCreateState("idle");
+          setCreateMessage("");
+        }}
+        onCreate={(openInStudio) => void createVaultDocument(openInStudio)}
+      />
       <PublicFooter />
+    </div>
+  );
+}
+
+function CreateDocumentModal({
+  createForm,
+  createState,
+  isOpen,
+  message,
+  onChange,
+  onClose,
+  onCreate,
+}: {
+  createForm: DashboardCreateForm;
+  createState: "idle" | "saving" | "opening" | "error";
+  isOpen: boolean;
+  message: string;
+  onChange: <K extends keyof DashboardCreateForm>(
+    key: K,
+    value: DashboardCreateForm[K],
+  ) => void;
+  onClose: () => void;
+  onCreate: (openInStudio: boolean) => void;
+}) {
+  const isBusy = createState === "saving" || createState === "opening";
+
+  if (!isOpen) {
+    return null;
+  }
+
+  function submitCreate(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    onCreate(false);
+  }
+
+  return (
+    <div
+      className="modal-backdrop no-print"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !isBusy) {
+          onClose();
+        }
+      }}
+    >
+      <section
+        className="post-download-modal create-document-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-document-title"
+      >
+        <button
+          className="modal-close"
+          disabled={isBusy}
+          type="button"
+          title="Close"
+          onClick={onClose}
+        >
+          <X size={18} />
+        </button>
+
+        <div className="modal-icon" aria-hidden="true">
+          <FilePlus2 size={24} />
+        </div>
+
+        <div className="modal-copy">
+          <span>Create document</span>
+          <h2 id="create-document-title">Start a new contract</h2>
+          <p>
+            Create a draft in your vault, then open it in Contract Studio for
+            editing, provider signature, and client countersign links.
+          </p>
+        </div>
+
+        <form className="create-document-form" onSubmit={submitCreate}>
+          <Field label="Document source">
+            <select
+              value={createForm.source}
+              onChange={(event) => onChange("source", event.target.value)}
+            >
+              <optgroup label="Contract Studio">
+                {contractTemplates.map((template) => (
+                  <option key={template.key} value={`core:${template.key}`}>
+                    {template.name} - {template.meta}
+                  </option>
+                ))}
+              </optgroup>
+              <optgroup label="Template Library">
+                {seoTemplateList.map((template) => (
+                  <option key={template.path} value={`template:${template.path}`}>
+                    {template.contractTitle}
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+          </Field>
+
+          <Field label="Document name">
+            <input
+              placeholder="Optional custom name"
+              value={createForm.title}
+              onChange={(event) => onChange("title", event.target.value)}
+            />
+          </Field>
+
+          <div className="create-document-grid">
+            <Field label="Client name">
+              <input
+                required
+                value={createForm.clientName}
+                onChange={(event) => onChange("clientName", event.target.value)}
+              />
+            </Field>
+            <Field label="Service provider">
+              <input
+                required
+                value={createForm.providerName}
+                onChange={(event) => onChange("providerName", event.target.value)}
+              />
+            </Field>
+            <Field label="Payment amount">
+              <input
+                value={createForm.feeAmount}
+                onChange={(event) => onChange("feeAmount", event.target.value)}
+              />
+            </Field>
+            <Field label="Start date">
+              <input
+                required
+                type="date"
+                value={createForm.effectiveDate}
+                onChange={(event) => onChange("effectiveDate", event.target.value)}
+              />
+            </Field>
+          </div>
+
+          <Field label="Scope of work">
+            <textarea
+              rows={4}
+              value={createForm.scopeOfWork}
+              onChange={(event) => onChange("scopeOfWork", event.target.value)}
+            />
+          </Field>
+
+          {message ? (
+            <div
+              className={`modal-status ${
+                createState === "error" ? "local" : "success"
+              }`}
+            >
+              {message}
+            </div>
+          ) : null}
+
+          <div className="create-document-actions">
+            <button
+              className="button secondary"
+              disabled={isBusy}
+              type="submit"
+            >
+              <FolderOpen size={17} />
+              <span>{createState === "saving" ? "Saving..." : "Save Draft"}</span>
+            </button>
+            <button
+              className="button primary"
+              disabled={isBusy}
+              type="button"
+              onClick={() => onCreate(true)}
+            >
+              <Wand2 size={17} />
+              <span>
+                {createState === "opening" ? "Opening..." : "Save & Open Studio"}
+              </span>
+            </button>
+          </div>
+        </form>
+      </section>
     </div>
   );
 }
