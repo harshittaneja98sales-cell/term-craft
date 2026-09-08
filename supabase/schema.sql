@@ -144,13 +144,18 @@ create index if not exists billing_profiles_status_idx
 
 alter table public.billing_profiles enable row level security;
 
+revoke all on public.billing_profiles from anon;
+revoke all on public.billing_profiles from authenticated;
+
 grant select on public.billing_profiles to authenticated;
+grant all on public.billing_profiles to service_role;
 
 drop policy if exists "Users can read own billing profile" on public.billing_profiles;
 create policy "Users can read own billing profile"
   on public.billing_profiles
   for select
-  using (auth.uid() = user_id);
+  to authenticated
+  using ((select auth.uid()) = user_id);
 
 create or replace function public.set_billing_profiles_updated_at()
 returns trigger as $$
