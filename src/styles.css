@@ -2614,9 +2614,12 @@ button:focus-visible {
 }
 
 .pdf-placed-field.filled {
-  border-color: rgba(15, 118, 110, 0.72);
-  background: rgba(255, 255, 255, 0.86);
+  border-color: transparent;
+  background: transparent;
   color: var(--ink);
+  box-shadow: none;
+  outline: 0;
+  padding: 0;
 }
 
 .pdf-placed-field.checkbox {
@@ -2703,12 +2706,18 @@ button:focus-visible {
   position: absolute;
   right: -6px;
   bottom: -6px;
+  display: none;
   width: 13px;
   height: 13px;
   border: 1px solid #ffffff;
   border-radius: 4px;
   background: currentColor;
   cursor: nwse-resize;
+}
+
+.pdf-placed-field:hover .pdf-field-resize,
+.pdf-placed-field.active .pdf-field-resize {
+  display: block;
 }
 
 .pdf-inspector-form,

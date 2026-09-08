@@ -258,6 +258,7 @@ type PdfFieldValue = {
   fieldId: string;
   signatureDataUrl?: string;
   signatureMethod?: SignatureMethod;
+  signerName?: string;
   textValue?: string;
 };
 
@@ -1650,9 +1651,9 @@ function escapeXml(value: string) {
 }
 
 function typedSignatureDataUrl(name: string) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="560" height="180" viewBox="0 0 560 180"><rect width="560" height="180" fill="white"/><text x="28" y="108" font-family="Segoe Script, Bradley Hand, Brush Script MT, cursive" font-size="58" fill="#17211f">${escapeXml(
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="560" height="180" viewBox="0 0 560 180"><text x="28" y="112" font-family="Segoe Script, Bradley Hand, Brush Script MT, cursive" font-size="64" fill="#17211f">${escapeXml(
     name,
-  )}</text><line x1="24" y1="136" x2="536" y2="136" stroke="#6b7280" stroke-width="2"/></svg>`;
+  )}</text></svg>`;
 
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
@@ -6306,11 +6307,13 @@ function PdfFieldSigningModal({
   const [pendingSignature, setPendingSignature] = useState<{
     dataUrl: string;
     method: SignatureMethod;
+    signerName?: string;
   } | null>(
     value?.signatureDataUrl && value.signatureMethod
       ? {
           dataUrl: value.signatureDataUrl,
           method: value.signatureMethod,
+          signerName: value.signerName,
         }
       : null,
   );
@@ -6336,6 +6339,7 @@ function PdfFieldSigningModal({
         fieldId: field.id,
         signatureDataUrl: pendingSignature.dataUrl,
         signatureMethod: pendingSignature.method,
+        signerName: pendingSignature.signerName,
       });
       return;
     }
@@ -6386,16 +6390,17 @@ function PdfFieldSigningModal({
             <>
               <SignatureCapture
                 resetKey={field.id}
-                signerName={
+                signerName={value?.signerName || ""}
+                typedNamePlaceholder={
                   field.type === "initials"
-                    ? "Initials"
-                    : field.assignee === "client"
-                      ? "Client"
-                      : "Sender"
+                    ? "Type initials"
+                    : "Type signer name"
                 }
-                onSignatureChange={(dataUrl, method) => {
+                onSignatureChange={(dataUrl, method, typedName) => {
                   setPendingSignature(
-                    dataUrl && method ? { dataUrl, method } : null,
+                    dataUrl && method
+                      ? { dataUrl, method, signerName: typedName }
+                      : null,
                   );
                 }}
               />
@@ -8597,10 +8602,16 @@ function SignatureCapture({
   onSignatureChange,
   resetKey,
   signerName,
+  typedNamePlaceholder = "Type signer name",
 }: {
-  onSignatureChange: (dataUrl: string | null, method: SignatureMethod | null) => void;
+  onSignatureChange: (
+    dataUrl: string | null,
+    method: SignatureMethod | null,
+    typedName?: string,
+  ) => void;
   resetKey: string;
   signerName: string;
+  typedNamePlaceholder?: string;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawing = useRef(false);
@@ -8652,6 +8663,7 @@ function SignatureCapture({
       onSignatureChange(
         cleaned ? typedSignatureDataUrl(cleaned) : null,
         cleaned ? "typed" : null,
+        cleaned || undefined,
       );
     } else if (!hasInk) {
       onSignatureChange(null, null);
@@ -8775,6 +8787,7 @@ function SignatureCapture({
       ) : (
         <div className="typed-signature">
           <input
+            placeholder={typedNamePlaceholder}
             value={typedName}
             onChange={(event) => setTypedName(event.target.value)}
           />
