@@ -5203,6 +5203,7 @@ function PdfFieldEditorPage() {
   const [selectedFieldId, setSelectedFieldId] = useState("");
   const [signingFieldId, setSigningFieldId] = useState("");
   const canvasRefs = useRef<Record<number, HTMLCanvasElement | null>>({});
+  const pageRefs = useRef<Record<number, HTMLElement | null>>({});
 
   const selectedField = useMemo(
     () => fields.find((field) => field.id === selectedFieldId) ?? null,
@@ -5370,6 +5371,7 @@ function PdfFieldEditorPage() {
     setActiveFieldType(type);
     setActivePageNumber(targetPageNumber);
     setSelectedFieldId(field.id);
+    scrollToPdfField(field.id, targetPageNumber);
   }
 
   function addFieldFromDrop(
@@ -5409,6 +5411,45 @@ function PdfFieldEditorPage() {
         field.id === fieldId ? { ...field, ...patch } : field,
       ),
     );
+  }
+
+  function scrollToPdfPage(pageNumber: number) {
+    window.requestAnimationFrame(() => {
+      pageRefs.current[pageNumber]?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+        inline: "center",
+      });
+    });
+  }
+
+  function scrollToPdfField(fieldId: string, pageNumber: number) {
+    window.requestAnimationFrame(() => {
+      const fieldElement = document.querySelector<HTMLElement>(
+        `[data-pdf-field-id="${fieldId}"]`,
+      );
+
+      if (fieldElement) {
+        fieldElement.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+          inline: "center",
+        });
+        fieldElement.focus({ preventScroll: true });
+        return;
+      }
+
+      scrollToPdfPage(pageNumber);
+    });
+  }
+
+  function selectPdfField(field: PdfPlacedField, shouldScroll = false) {
+    setActivePageNumber(field.pageNumber);
+    setSelectedFieldId(field.id);
+
+    if (shouldScroll) {
+      scrollToPdfField(field.id, field.pageNumber);
+    }
   }
 
   function deleteField(fieldId: string) {
@@ -5534,8 +5575,7 @@ function PdfFieldEditorPage() {
   }
 
   function activatePdfField(field: PdfPlacedField) {
-    setActivePageNumber(field.pageNumber);
-    setSelectedFieldId(field.id);
+    selectPdfField(field, true);
 
     if (field.type === "checkbox") {
       const currentValue = fieldValues[field.id];
@@ -5847,7 +5887,13 @@ function PdfFieldEditorPage() {
                     );
 
                     return (
-                      <section className="pdf-page-block" key={page.pageNumber}>
+                      <section
+                        className="pdf-page-block"
+                        key={page.pageNumber}
+                        ref={(node) => {
+                          pageRefs.current[page.pageNumber] = node;
+                        }}
+                      >
                         <div
                           className={`pdf-page-heading ${
                             activePageNumber === page.pageNumber ? "active" : ""
@@ -5902,6 +5948,7 @@ function PdfFieldEditorPage() {
                                 }`}
                                 key={field.id}
                                 role="button"
+                                data-pdf-field-id={field.id}
                                 style={{
                                   height: `${field.height}%`,
                                   left: `${field.x}%`,
@@ -5916,7 +5963,7 @@ function PdfFieldEditorPage() {
                                   if (editorMode === "sign") {
                                     activatePdfField(field);
                                   } else {
-                                    setSelectedFieldId(field.id);
+                                    selectPdfField(field);
                                   }
                                 }}
                                 onPointerDown={(event) =>
@@ -6021,9 +6068,18 @@ function PdfFieldEditorPage() {
                         setActivePageNumber(nextPageNumber);
                         updateField(selectedField.id, {
                           pageNumber: nextPageNumber,
-                          x: 36,
-                          y: 42,
+                          x: clampNumber(
+                            selectedField.x,
+                            0,
+                            100 - selectedField.width,
+                          ),
+                          y: clampNumber(
+                            selectedField.y,
+                            0,
+                            100 - selectedField.height,
+                          ),
                         });
+                        scrollToPdfField(selectedField.id, nextPageNumber);
                       }}
                     >
                       {pages.map((page) => (
@@ -6088,11 +6144,10 @@ function PdfFieldEditorPage() {
                       key={field.id}
                       type="button"
                       onClick={() => {
-                        setActivePageNumber(field.pageNumber);
                         if (editorMode === "sign") {
                           activatePdfField(field);
                         } else {
-                          setSelectedFieldId(field.id);
+                          selectPdfField(field, true);
                         }
                       }}
                     >
