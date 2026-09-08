@@ -12,7 +12,7 @@ const port = Number(process.env.PORT ?? 4173);
 const app = express();
 app.use(
   express.json({
-    limit: "2mb",
+    limit: "45mb",
     verify: (req, _res, buffer) => {
       req.rawBody = Buffer.from(buffer);
     },

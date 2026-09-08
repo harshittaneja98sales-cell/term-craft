@@ -1,6 +1,9 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
-import { sendEditableVersionEmail } from "./email-service.mjs";
+import {
+  sendEditableVersionEmail,
+  sendPdfSigningLinkEmail,
+} from "./email-service.mjs";
 import {
   deleteDocument,
   getDocument,
@@ -10,6 +13,16 @@ import {
   saveDocument,
   updateDocument,
 } from "./document-store.mjs";
+import {
+  deletePdfDocument,
+  getPdfDocument,
+  getPdfDocumentBySigningTokenHash,
+  getPdfDocumentStorageInfo,
+  listPdfDocuments,
+  readPdfDocumentFile,
+  savePdfDocument,
+  updatePdfDocument,
+} from "./pdf-document-store.mjs";
 import {
   createBillingPortalSession,
   createSubscriptionCheckoutSession,
@@ -67,6 +80,190 @@ function cleanJsonValue(value, fallback, maxLength = 800000) {
   }
 
   return JSON.parse(serialized);
+}
+
+const pdfFieldTypes = new Set(["signature", "initials", "text", "date", "checkbox"]);
+const pdfFieldAssignees = new Set(["sender", "client"]);
+const maxPdfUploadBytes = 30 * 1024 * 1024;
+
+function clampNumber(value, min, max) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return min;
+  }
+
+  return Math.min(Math.max(parsed, min), max);
+}
+
+function parsePdfUploadData(value) {
+  const raw = typeof value === "string" ? value : "";
+  const base64 = raw.includes(",") ? raw.slice(raw.indexOf(",") + 1) : raw;
+
+  if (!base64) {
+    const error = new Error("PDF data is required.");
+    error.status = 400;
+    throw error;
+  }
+
+  const buffer = Buffer.from(base64, "base64");
+
+  if (!buffer.length || buffer.subarray(0, 4).toString("utf8") !== "%PDF") {
+    const error = new Error("Upload a valid PDF file.");
+    error.status = 400;
+    throw error;
+  }
+
+  if (buffer.byteLength > maxPdfUploadBytes) {
+    const error = new Error("Upload a PDF under 30 MB.");
+    error.status = 413;
+    throw error;
+  }
+
+  return buffer;
+}
+
+function cleanPdfPages(value) {
+  return (Array.isArray(value) ? value : [])
+    .slice(0, 300)
+    .map((page, index) => ({
+      height: clampNumber(page?.height, 1, 5000),
+      pageNumber: Math.max(1, Math.floor(clampNumber(page?.pageNumber, index + 1, 300))),
+      width: clampNumber(page?.width, 1, 5000),
+    }));
+}
+
+function cleanPdfFields(value, pageCount) {
+  return (Array.isArray(value) ? value : [])
+    .slice(0, 500)
+    .filter((field) => pdfFieldTypes.has(field?.type))
+    .map((field, index) => {
+      const width = clampNumber(field?.width, 4, 100);
+      const height = clampNumber(field?.height, 3.5, 100);
+      return {
+        assignee: pdfFieldAssignees.has(field?.assignee) ? field.assignee : "client",
+        height,
+        id: cleanString(field?.id, 100) || randomUUID(),
+        label: cleanString(field?.label, 160) || `Field ${index + 1}`,
+        pageNumber: Math.max(
+          1,
+          Math.min(
+            pageCount || 1,
+            Math.floor(clampNumber(field?.pageNumber, 1, pageCount || 1)),
+          ),
+        ),
+        required: field?.required !== false,
+        type: field.type,
+        width,
+        x: clampNumber(field?.x, 0, Math.max(0, 100 - width)),
+        y: clampNumber(field?.y, 0, Math.max(0, 100 - height)),
+      };
+    });
+}
+
+function cleanPdfFieldValue(field, value) {
+  if (!field || !value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  if (field.type === "checkbox") {
+    return {
+      checked: Boolean(value.checked),
+      completedAt: cleanString(value.completedAt, 80) || new Date().toISOString(),
+      fieldId: field.id,
+    };
+  }
+
+  if (field.type === "signature" || field.type === "initials") {
+    const signatureDataUrl = cleanString(value.signatureDataUrl, 700000);
+    const signatureMethod = cleanString(value.signatureMethod, 40);
+
+    if (
+      !signatureDataUrl ||
+      !["drawn", "typed"].includes(signatureMethod) ||
+      (!signatureDataUrl.startsWith("data:image/png") &&
+        !signatureDataUrl.startsWith("data:image/svg+xml"))
+    ) {
+      return null;
+    }
+
+    return {
+      completedAt: cleanString(value.completedAt, 80) || new Date().toISOString(),
+      fieldId: field.id,
+      signatureDataUrl,
+      signatureMethod,
+      signerName: cleanString(value.signerName, 160),
+    };
+  }
+
+  const textValue = cleanString(value.textValue, 2000);
+
+  if (!textValue) {
+    return null;
+  }
+
+  return {
+    completedAt: cleanString(value.completedAt, 80) || new Date().toISOString(),
+    fieldId: field.id,
+    textValue,
+  };
+}
+
+function cleanPdfFieldValues(value, fields) {
+  const fieldMap = new Map(fields.map((field) => [field.id, field]));
+  const values = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const nextValues = {};
+
+  for (const [fieldId, fieldValue] of Object.entries(values)) {
+    const field = fieldMap.get(fieldId);
+    if (!field) {
+      continue;
+    }
+
+    const nextValue = cleanPdfFieldValue(field, fieldValue);
+    if (nextValue) {
+      nextValues[field.id] = nextValue;
+    }
+  }
+
+  return nextValues;
+}
+
+function isPdfFieldCompleted(field, value) {
+  if (!value) {
+    return false;
+  }
+
+  if (field.type === "checkbox") {
+    return Boolean(value.checked);
+  }
+
+  if (field.type === "signature" || field.type === "initials") {
+    return Boolean(value.signatureDataUrl);
+  }
+
+  return Boolean(cleanString(value.textValue, 2000));
+}
+
+function createUploadedPdfHash(document) {
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        fieldValues: document.fieldValues,
+        fields: document.fields,
+        fileHash: document.fileHash,
+        pageCount: document.pageCount,
+      }),
+    )
+    .digest("hex");
+}
+
+function sanitizePdfDocument(document) {
+  return {
+    ...document,
+    signingTokenHash: "",
+    storagePath: "",
+    userId: "",
+  };
 }
 
 function getUtm(body) {
@@ -358,6 +555,65 @@ function createDocumentFromRequest(req, user) {
   };
 }
 
+function createPdfDocumentFromRequest(req, user, existingDocument = null) {
+  const body = req.body ?? {};
+  const pages = cleanPdfPages(body.pages);
+  const pageCount =
+    Math.max(
+      pages.length,
+      Math.floor(clampNumber(body.pageCount, pages.length || 1, 300)),
+    ) || 1;
+  const fields = cleanPdfFields(body.fields, pageCount);
+  const fieldValues = cleanPdfFieldValues(body.fieldValues, fields);
+  const pdfBuffer = body.pdfDataUrl ? parsePdfUploadData(body.pdfDataUrl) : null;
+  const fileName = cleanString(body.fileName ?? existingDocument?.fileName, 180);
+  const title =
+    cleanString(body.title ?? existingDocument?.title, 180) ||
+    fileName ||
+    "Uploaded PDF";
+
+  if (!fileName && !existingDocument?.fileName) {
+    return {
+      error: {
+        status: 400,
+        payload: { error: "PDF file name is required." },
+      },
+    };
+  }
+
+  return {
+    document: {
+      ...(existingDocument ?? {}),
+      id: cleanString(body.id ?? existingDocument?.id, 80),
+      userId: user.id,
+      title,
+      fileName,
+      fileSize: pdfBuffer?.byteLength ?? existingDocument?.fileSize ?? 0,
+      fileHash: pdfBuffer
+        ? createHash("sha256").update(pdfBuffer).digest("hex")
+        : existingDocument?.fileHash ?? "",
+      storageBucket: existingDocument?.storageBucket ?? "termcraft-pdfs",
+      storagePath: existingDocument?.storagePath ?? "",
+      status: cleanString(body.status ?? existingDocument?.status, 60) || "Draft",
+      pageCount,
+      pages,
+      fields,
+      fieldValues,
+      signingTokenHash: existingDocument?.signingTokenHash ?? "",
+      signingCreatedAt: existingDocument?.signingCreatedAt ?? "",
+      signingExpiresAt: existingDocument?.signingExpiresAt ?? "",
+      signingCompletedAt: existingDocument?.signingCompletedAt ?? "",
+      signingRecipientEmail: existingDocument?.signingRecipientEmail ?? "",
+      signingRecipientName: existingDocument?.signingRecipientName ?? "",
+      auditEvents: Array.isArray(existingDocument?.auditEvents)
+        ? existingDocument.auditEvents
+        : [],
+      documentHash: existingDocument?.documentHash ?? "",
+    },
+    pdfBuffer,
+  };
+}
+
 function cleanSigningToken(value) {
   const token = cleanString(value, 160);
   return /^[a-zA-Z0-9_-]{24,160}$/.test(token) ? token : "";
@@ -475,6 +731,37 @@ async function loadSigningDocument(token) {
 
   if (isSigningLinkExpired(document)) {
     const error = new Error("This signing link has expired.");
+    error.status = 410;
+    throw error;
+  }
+
+  return document;
+}
+
+async function loadPdfSigningDocument(token) {
+  const cleanedToken = cleanSigningToken(token);
+
+  if (!cleanedToken) {
+    const error = new Error("Invalid PDF signing link.");
+    error.status = 400;
+    throw error;
+  }
+
+  const document = await getPdfDocumentBySigningTokenHash(
+    hashSigningToken(cleanedToken),
+  );
+
+  if (!document) {
+    const error = new Error("PDF signing link not found.");
+    error.status = 404;
+    throw error;
+  }
+
+  const expiresAt = cleanString(document.signingExpiresAt, 80);
+  const expires = expiresAt ? Date.parse(expiresAt) : NaN;
+
+  if (Number.isFinite(expires) && expires < Date.now()) {
+    const error = new Error("This PDF signing link has expired.");
     error.status = 410;
     throw error;
   }
@@ -836,6 +1123,393 @@ export function registerApiRoutes(app) {
         occurredAt: new Date().toISOString(),
       });
       res.status(201).json({ document, storage: getDocumentStorageInfo() });
+    } catch (error) {
+      sendApiError(res, error);
+    }
+  });
+
+  app.get("/api/pdf-documents", async (req, res) => {
+    try {
+      const user = await authenticateRequest(req);
+      const documents = await listPdfDocuments(user.id);
+      res.json({
+        documents: documents.map(sanitizePdfDocument),
+        storage: getPdfDocumentStorageInfo(),
+      });
+    } catch (error) {
+      sendApiError(res, error);
+    }
+  });
+
+  app.post("/api/pdf-documents", async (req, res) => {
+    try {
+      const user = await authenticateRequest(req);
+      const result = createPdfDocumentFromRequest(req, user);
+      if (result.error) {
+        res.status(result.error.status).json(result.error.payload);
+        return;
+      }
+
+      if (!result.pdfBuffer) {
+        res.status(400).json({ error: "PDF data is required." });
+        return;
+      }
+
+      const savedDocument = await savePdfDocument(
+        {
+          ...result.document,
+          auditEvents: [
+            createAuditRecord(
+              user.email || "Sender",
+              "PDF uploaded",
+              `${result.document.fileName} saved to the document vault.`,
+            ),
+          ],
+        },
+        result.pdfBuffer,
+      );
+
+      await saveAnalyticsEvent({
+        id: randomUUID(),
+        eventName: "uploaded_pdf_saved",
+        path: "/editor",
+        templateTitle: "Uploaded PDF",
+        templatePath: "/editor",
+        referrer: cleanString(req.get("referer"), 500),
+        utmSource: "",
+        utmMedium: "",
+        utmCampaign: "",
+        utmTerm: "",
+        utmContent: "",
+        metadata: { documentId: savedDocument.id, userId: user.id },
+        userAgent: cleanString(req.get("user-agent"), 500),
+        occurredAt: new Date().toISOString(),
+      });
+
+      res.status(201).json({
+        document: sanitizePdfDocument(savedDocument),
+        storage: getPdfDocumentStorageInfo(),
+      });
+    } catch (error) {
+      sendApiError(res, error);
+    }
+  });
+
+  app.patch("/api/pdf-documents/:id", async (req, res) => {
+    try {
+      const user = await authenticateRequest(req);
+      const existingDocument = await getPdfDocument(
+        user.id,
+        cleanString(req.params.id, 80),
+      );
+
+      if (!existingDocument) {
+        res.status(404).json({ error: "Uploaded PDF not found." });
+        return;
+      }
+
+      const result = createPdfDocumentFromRequest(req, user, existingDocument);
+      if (result.error) {
+        res.status(result.error.status).json(result.error.payload);
+        return;
+      }
+
+      const savedDocument = await updatePdfDocument({
+        ...existingDocument,
+        ...result.document,
+        auditEvents: [
+          createAuditRecord(
+            user.email || "Sender",
+            "PDF field map updated",
+            `${result.document.fields.length} field(s) saved.`,
+          ),
+          ...(Array.isArray(existingDocument.auditEvents)
+            ? existingDocument.auditEvents
+            : []),
+        ],
+      });
+
+      res.json({
+        document: sanitizePdfDocument(savedDocument),
+        storage: getPdfDocumentStorageInfo(),
+      });
+    } catch (error) {
+      sendApiError(res, error);
+    }
+  });
+
+  app.get("/api/pdf-documents/:id/file", async (req, res) => {
+    try {
+      const user = await authenticateRequest(req);
+      const document = await getPdfDocument(user.id, cleanString(req.params.id, 80));
+
+      if (!document) {
+        res.status(404).json({ error: "Uploaded PDF not found." });
+        return;
+      }
+
+      const pdfBuffer = await readPdfDocumentFile(document);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="${document.fileName || "uploaded.pdf"}"`,
+      );
+      res.send(pdfBuffer);
+    } catch (error) {
+      sendApiError(res, error);
+    }
+  });
+
+  app.delete("/api/pdf-documents/:id", async (req, res) => {
+    try {
+      const user = await authenticateRequest(req);
+      const deleted = await deletePdfDocument(
+        user.id,
+        cleanString(req.params.id, 80),
+      );
+
+      if (!deleted) {
+        res.status(404).json({ error: "Uploaded PDF not found." });
+        return;
+      }
+
+      res.status(204).send();
+    } catch (error) {
+      sendApiError(res, error);
+    }
+  });
+
+  app.post("/api/pdf-signing-links", async (req, res) => {
+    try {
+      const user = await authenticateRequest(req);
+      const documentId = cleanString(req.body?.documentId, 80);
+      const recipientEmail = cleanString(req.body?.recipientEmail, 254).toLowerCase();
+      const recipientName = cleanString(req.body?.recipientName, 160);
+      const document = await getPdfDocument(user.id, documentId);
+
+      if (!document) {
+        res.status(404).json({ error: "Uploaded PDF not found." });
+        return;
+      }
+
+      if (!emailPattern.test(recipientEmail)) {
+        res.status(400).json({ error: "Client email is required." });
+        return;
+      }
+
+      const clientFields = document.fields.filter(
+        (field) => field?.assignee === "client",
+      );
+
+      if (clientFields.length === 0) {
+        res.status(400).json({
+          error: "Place at least one Client field before creating a signing link.",
+        });
+        return;
+      }
+
+      const token = createSigningToken();
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      const nextDocument = {
+        ...document,
+        status: "Sent",
+        signingCreatedAt: now.toISOString(),
+        signingExpiresAt: expiresAt,
+        signingRecipientEmail: recipientEmail,
+        signingRecipientName: recipientName,
+        signingTokenHash: hashSigningToken(token),
+        auditEvents: [
+          createAuditRecord(
+            user.email || "Sender",
+            "PDF signing link created",
+            `Signing link created for ${recipientEmail} and expires ${expiresAt}.`,
+          ),
+          ...(Array.isArray(document.auditEvents) ? document.auditEvents : []),
+        ],
+      };
+      const savedDocument = await updatePdfDocument(nextDocument);
+      const signingUrl = `${getSiteUrl(req)}/pdf-sign/${token}`;
+      const emailDelivery = await sendPdfSigningLinkEmail({
+        documentTitle: savedDocument.title,
+        expiresAt,
+        recipientEmail,
+        recipientName,
+        senderEmail: user.email,
+        signingUrl,
+      });
+
+      await saveAnalyticsEvent({
+        id: randomUUID(),
+        eventName: "uploaded_pdf_signing_link_created",
+        path: "/editor",
+        templateTitle: "Uploaded PDF",
+        templatePath: "/editor",
+        referrer: cleanString(req.get("referer"), 500),
+        utmSource: "",
+        utmMedium: "",
+        utmCampaign: "",
+        utmTerm: "",
+        utmContent: "",
+        metadata: {
+          documentId: savedDocument.id,
+          emailSent: emailDelivery.sent,
+          userId: user.id,
+        },
+        userAgent: cleanString(req.get("user-agent"), 500),
+        occurredAt: new Date().toISOString(),
+      });
+
+      res.status(201).json({
+        document: sanitizePdfDocument(savedDocument),
+        emailDelivery,
+        link: {
+          expiresAt,
+          url: signingUrl,
+        },
+        storage: getPdfDocumentStorageInfo(),
+      });
+    } catch (error) {
+      sendApiError(res, error);
+    }
+  });
+
+  app.get("/api/pdf-signing-links/:token", async (req, res) => {
+    try {
+      const document = await loadPdfSigningDocument(req.params.token);
+      let nextDocument = document;
+
+      if (document.status === "Sent") {
+        nextDocument = await updatePdfDocument({
+          ...document,
+          status: "Viewed",
+          auditEvents: [
+            createAuditRecord(
+              document.signingRecipientEmail || "Client",
+              "PDF signing link viewed",
+              `Viewed from ${getRequestIp(req)}.`,
+            ),
+            ...(Array.isArray(document.auditEvents)
+              ? document.auditEvents
+              : []),
+          ],
+        });
+      }
+
+      res.json({
+        document: sanitizePdfDocument(nextDocument),
+        recipientEmail: nextDocument.signingRecipientEmail,
+        recipientName: nextDocument.signingRecipientName,
+      });
+    } catch (error) {
+      sendApiError(res, error);
+    }
+  });
+
+  app.get("/api/pdf-signing-links/:token/file", async (req, res) => {
+    try {
+      const document = await loadPdfSigningDocument(req.params.token);
+      const pdfBuffer = await readPdfDocumentFile(document);
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="${document.fileName || "uploaded.pdf"}"`,
+      );
+      res.send(pdfBuffer);
+    } catch (error) {
+      sendApiError(res, error);
+    }
+  });
+
+  app.post("/api/pdf-signing-links/:token/sign", async (req, res) => {
+    try {
+      const document = await loadPdfSigningDocument(req.params.token);
+      const signerEmail = cleanString(req.body?.signerEmail, 254).toLowerCase();
+      const signerName = cleanString(req.body?.signerName, 160);
+      const consent = Boolean(req.body?.consent);
+
+      if (!signerName || !emailPattern.test(signerEmail)) {
+        res.status(400).json({ error: "Signer name and valid email are required." });
+        return;
+      }
+
+      if (!consent) {
+        res.status(400).json({ error: "Electronic signature consent is required." });
+        return;
+      }
+
+      const clientFields = document.fields.filter(
+        (field) => field?.assignee === "client",
+      );
+      const submittedValues =
+        req.body?.fieldValues &&
+        typeof req.body.fieldValues === "object" &&
+        !Array.isArray(req.body.fieldValues)
+          ? req.body.fieldValues
+          : {};
+      const nextFieldValues = { ...(document.fieldValues ?? {}) };
+
+      for (const field of clientFields) {
+        const value = cleanPdfFieldValue(field, submittedValues[field.id]);
+        if (value) {
+          nextFieldValues[field.id] = value;
+        }
+      }
+
+      const missingRequired = clientFields.filter(
+        (field) => field.required && !isPdfFieldCompleted(field, nextFieldValues[field.id]),
+      );
+
+      if (missingRequired.length > 0) {
+        res.status(400).json({
+          error: `${missingRequired.length} required field(s) still need to be completed.`,
+        });
+        return;
+      }
+
+      const signedAt = new Date().toISOString();
+      const nextDocumentSnapshot = {
+        ...document,
+        fieldValues: nextFieldValues,
+        signingCompletedAt: signedAt,
+        status: "Signed",
+      };
+      const documentHash = createUploadedPdfHash(nextDocumentSnapshot);
+      const savedDocument = await updatePdfDocument({
+        ...nextDocumentSnapshot,
+        documentHash,
+        auditEvents: [
+          createAuditRecord(
+            signerEmail,
+            "PDF document signed",
+            `Signed by ${signerName} from ${getRequestIp(req)} using ${cleanString(req.get("user-agent"), 240)}. Document SHA-256: ${documentHash}.`,
+          ),
+          ...(Array.isArray(document.auditEvents) ? document.auditEvents : []),
+        ],
+      });
+
+      await saveAnalyticsEvent({
+        id: randomUUID(),
+        eventName: "uploaded_pdf_signed",
+        path: "/pdf-sign",
+        templateTitle: "Uploaded PDF",
+        templatePath: "/editor",
+        referrer: cleanString(req.get("referer"), 500),
+        utmSource: "",
+        utmMedium: "",
+        utmCampaign: "",
+        utmTerm: "",
+        utmContent: "",
+        metadata: { documentHash, documentId: document.id },
+        userAgent: cleanString(req.get("user-agent"), 500),
+        occurredAt: signedAt,
+      });
+
+      res.json({
+        document: sanitizePdfDocument(savedDocument),
+        documentHash,
+        status: "signed",
+      });
     } catch (error) {
       sendApiError(res, error);
     }

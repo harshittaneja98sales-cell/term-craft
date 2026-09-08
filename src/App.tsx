@@ -4,6 +4,7 @@ import {
   BadgeDollarSign,
   CheckCircle2,
   Clock3,
+  Copy,
   Database,
   Download,
   FileCheck2,
@@ -18,6 +19,7 @@ import {
   Printer,
   RotateCcw,
   Save,
+  Send,
   ShieldCheck,
   Search,
   Target,
@@ -275,6 +277,59 @@ type PdfFieldDragState = {
   startWidth: number;
   startX: number;
   startY: number;
+};
+
+type UploadedPdfDocument = {
+  id: string;
+  userId: string;
+  title: string;
+  fileName: string;
+  fileSize: number;
+  fileHash: string;
+  storageBucket: string;
+  storagePath: string;
+  status: string;
+  pageCount: number;
+  pages: PdfPagePreview[];
+  fields: PdfPlacedField[];
+  fieldValues: Record<string, PdfFieldValue>;
+  signingCreatedAt: string;
+  signingExpiresAt: string;
+  signingCompletedAt: string;
+  signingRecipientEmail: string;
+  signingRecipientName: string;
+  auditEvents: AuditEvent[];
+  documentHash: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type UploadedPdfSavePayload = {
+  title: string;
+  fileName: string;
+  pdfDataUrl?: string;
+  pageCount: number;
+  pages: PdfPagePreview[];
+  fields: PdfPlacedField[];
+  fieldValues: Record<string, PdfFieldValue>;
+  status: string;
+};
+
+type UploadedPdfSigningLinkResponse = {
+  document: UploadedPdfDocument;
+  documentHash?: string;
+  emailDelivery?: {
+    provider: string;
+    sent: boolean;
+    skipped: boolean;
+    reason?: string;
+    id?: string;
+  };
+  link?: SigningLinkInfo;
+  recipientEmail?: string;
+  recipientName?: string;
+  status?: string;
+  storage?: DocumentStorageInfo;
 };
 
 type SaveVaultDocumentPayload = {
@@ -766,6 +821,27 @@ function loadPdfJsModule() {
   return pdfJsModulePromise;
 }
 
+async function loadPdfDocumentFromArrayBuffer(fileData: ArrayBuffer) {
+  const pdfjsLib = await loadPdfJsModule();
+  const loadingTask = pdfjsLib.getDocument({
+    data: new Uint8Array(fileData),
+  });
+  const loadedDocument = await loadingTask.promise;
+  const pages: PdfPagePreview[] = [];
+
+  for (let pageNumber = 1; pageNumber <= loadedDocument.numPages; pageNumber += 1) {
+    const page = await loadedDocument.getPage(pageNumber);
+    const viewport = page.getViewport({ scale: PDF_RENDER_SCALE });
+    pages.push({
+      height: viewport.height,
+      pageNumber,
+      width: viewport.width,
+    });
+  }
+
+  return { document: loadedDocument, pages };
+}
+
 function getPdfFieldLabel(type: PdfFieldType, count: number) {
   return `${PDF_FIELD_LABELS[type]} ${count}`;
 }
@@ -1072,6 +1148,15 @@ function clearStoredAuthSession() {
   localStorage.removeItem(AUTH_SESSION_KEY);
 }
 
+function readFileAsDataUrl(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read this PDF file."));
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.readAsDataURL(file);
+  });
+}
+
 function createAuthHeaders(session: AuthSession) {
   return {
     Authorization: `Bearer ${session.accessToken}`,
@@ -1210,6 +1295,21 @@ async function fetchVaultDocuments(session: AuthSession) {
   }>;
 }
 
+async function fetchUploadedPdfDocuments(session: AuthSession) {
+  const response = await fetch("/api/pdf-documents", {
+    headers: createAuthHeaders(session),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Could not load uploaded PDFs."));
+  }
+
+  return response.json() as Promise<{
+    documents: UploadedPdfDocument[];
+    storage: DocumentStorageInfo;
+  }>;
+}
+
 async function fetchBillingStatus(session: AuthSession) {
   const response = await fetch("/api/billing/status", {
     headers: createAuthHeaders(session),
@@ -1280,6 +1380,73 @@ async function saveVaultDocument(
   }>;
 }
 
+async function saveUploadedPdfDocument(
+  session: AuthSession,
+  payload: UploadedPdfSavePayload,
+) {
+  const response = await fetch("/api/pdf-documents", {
+    body: JSON.stringify(payload),
+    headers: createAuthHeaders(session),
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Could not save uploaded PDF."));
+  }
+
+  return response.json() as Promise<{
+    document: UploadedPdfDocument;
+    storage: DocumentStorageInfo;
+  }>;
+}
+
+async function updateUploadedPdfDocument(
+  session: AuthSession,
+  documentId: string,
+  payload: UploadedPdfSavePayload,
+) {
+  const response = await fetch(
+    `/api/pdf-documents/${encodeURIComponent(documentId)}`,
+    {
+      body: JSON.stringify(payload),
+      headers: createAuthHeaders(session),
+      method: "PATCH",
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Could not update uploaded PDF."));
+  }
+
+  return response.json() as Promise<{
+    document: UploadedPdfDocument;
+    storage: DocumentStorageInfo;
+  }>;
+}
+
+async function createUploadedPdfSigningLink(
+  session: AuthSession,
+  payload: {
+    documentId: string;
+    recipientEmail: string;
+    recipientName: string;
+  },
+) {
+  const response = await fetch("/api/pdf-signing-links", {
+    body: JSON.stringify(payload),
+    headers: createAuthHeaders(session),
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      await readApiError(response, "Could not create PDF signing link."),
+    );
+  }
+
+  return response.json() as Promise<UploadedPdfSigningLinkResponse>;
+}
+
 async function createLiveSigningLink(
   session: AuthSession,
   payload: SaveVaultDocumentPayload,
@@ -1347,6 +1514,52 @@ async function submitLiveCountersignature({
   return response.json() as Promise<SigningLinkResponse>;
 }
 
+async function fetchUploadedPdfSigningDocument(token: string) {
+  const response = await fetch(
+    `/api/pdf-signing-links/${encodeURIComponent(token)}`,
+  );
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Could not load PDF signing link."));
+  }
+
+  return response.json() as Promise<UploadedPdfSigningLinkResponse>;
+}
+
+async function submitUploadedPdfSignature({
+  consent,
+  fieldValues,
+  signerEmail,
+  signerName,
+  token,
+}: {
+  consent: boolean;
+  fieldValues: Record<string, PdfFieldValue>;
+  signerEmail: string;
+  signerName: string;
+  token: string;
+}) {
+  const response = await fetch(
+    `/api/pdf-signing-links/${encodeURIComponent(token)}/sign`,
+    {
+      body: JSON.stringify({
+        consent,
+        fieldValues,
+        signerEmail,
+        signerName,
+      }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Could not submit PDF signature."));
+  }
+
+  return response.json() as Promise<UploadedPdfSigningLinkResponse>;
+}
+
 async function deleteVaultDocument(session: AuthSession, documentId: string) {
   const response = await fetch(`/api/documents/${encodeURIComponent(documentId)}`, {
     headers: createAuthHeaders(session),
@@ -1356,6 +1569,45 @@ async function deleteVaultDocument(session: AuthSession, documentId: string) {
   if (!response.ok) {
     throw new Error(await readApiError(response, "Could not delete document."));
   }
+}
+
+async function deleteUploadedPdfDocument(session: AuthSession, documentId: string) {
+  const response = await fetch(
+    `/api/pdf-documents/${encodeURIComponent(documentId)}`,
+    {
+      headers: createAuthHeaders(session),
+      method: "DELETE",
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Could not delete uploaded PDF."));
+  }
+}
+
+async function downloadUploadedPdfOriginal(
+  session: AuthSession,
+  documentId: string,
+  fileName: string,
+) {
+  const response = await fetch(
+    `/api/pdf-documents/${encodeURIComponent(documentId)}/file`,
+    {
+      headers: {
+        Authorization: `Bearer ${session.accessToken}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Could not download PDF."));
+  }
+
+  downloadBlob(
+    fileName || "uploaded.pdf",
+    "application/pdf",
+    await response.blob(),
+  );
 }
 
 function getInternalNextPath() {
@@ -1877,8 +2129,8 @@ function getContractStatus(signers: Signer[]) {
   return "Partially signed";
 }
 
-function downloadBlob(fileName: string, type: string, value: string) {
-  const blob = new Blob([value], { type });
+function downloadBlob(fileName: string, type: string, value: BlobPart | BlobPart[]) {
+  const blob = value instanceof Blob ? value : new Blob(Array.isArray(value) ? value : [value], { type });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -1891,6 +2143,118 @@ function downloadBlob(fileName: string, type: string, value: string) {
 
 function createFileSlug(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "contract";
+}
+
+async function downloadFlattenedUploadedPdf({
+  canvasRefs,
+  fieldValues,
+  fields,
+  pages,
+  pdfName,
+}: {
+  canvasRefs: Record<number, HTMLCanvasElement | null>;
+  fieldValues: Record<string, PdfFieldValue>;
+  fields: PdfPlacedField[];
+  pages: PdfPagePreview[];
+  pdfName: string;
+}) {
+  if (pages.length === 0) {
+    throw new Error("No PDF pages are available.");
+  }
+
+  const { jsPDF } = await import("jspdf");
+  const firstPage = pages[0];
+  const firstWidth = firstPage.width / PDF_RENDER_SCALE;
+  const firstHeight = firstPage.height / PDF_RENDER_SCALE;
+  const doc = new jsPDF({
+    format: [firstWidth, firstHeight],
+    orientation: firstWidth > firstHeight ? "landscape" : "portrait",
+    unit: "pt",
+  });
+
+  pages.forEach((page, pageIndex) => {
+    const pageWidth = page.width / PDF_RENDER_SCALE;
+    const pageHeight = page.height / PDF_RENDER_SCALE;
+    const canvas = canvasRefs[page.pageNumber];
+
+    if (pageIndex > 0) {
+      doc.addPage(
+        [pageWidth, pageHeight],
+        pageWidth > pageHeight ? "landscape" : "portrait",
+      );
+    }
+
+    doc.setPage(pageIndex + 1);
+
+    if (canvas) {
+      doc.addImage(
+        canvas.toDataURL("image/jpeg", 0.95),
+        "JPEG",
+        0,
+        0,
+        pageWidth,
+        pageHeight,
+      );
+    }
+
+    fields
+      .filter((field) => field.pageNumber === page.pageNumber)
+      .forEach((field) => {
+        const value = fieldValues[field.id];
+        if (!isPdfFieldCompleted(field, value)) {
+          return;
+        }
+
+        const x = (field.x / 100) * pageWidth;
+        const y = (field.y / 100) * pageHeight;
+        const width = (field.width / 100) * pageWidth;
+        const height = (field.height / 100) * pageHeight;
+
+        if (
+          (field.type === "signature" || field.type === "initials") &&
+          value?.signatureDataUrl
+        ) {
+          const padding = Math.min(5, height * 0.15);
+          doc.addImage(
+            value.signatureDataUrl,
+            "PNG",
+            x + padding,
+            y + padding,
+            Math.max(1, width - padding * 2),
+            Math.max(1, height - padding * 2),
+          );
+          return;
+        }
+
+        if (field.type === "checkbox") {
+          const boxSize = Math.min(width, height, 14);
+          doc.setDrawColor(15, 118, 110);
+          doc.setLineWidth(1);
+          doc.rect(x, y, boxSize, boxSize);
+          if (value?.checked) {
+            doc.setLineWidth(1.8);
+            doc.line(x + boxSize * 0.2, y + boxSize * 0.55, x + boxSize * 0.42, y + boxSize * 0.78);
+            doc.line(x + boxSize * 0.42, y + boxSize * 0.78, x + boxSize * 0.82, y + boxSize * 0.24);
+          }
+          return;
+        }
+
+        const textValue = formatPdfFieldValue(field, value);
+        if (!textValue) {
+          return;
+        }
+
+        const fontSize = clampNumber(height * 0.44, 8, 16);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(fontSize);
+        doc.setTextColor(15, 23, 42);
+        doc.text(textValue, x + 3, y + Math.min(height - 2, fontSize + 3), {
+          maxWidth: Math.max(1, width - 6),
+        });
+      });
+  });
+
+  doc.save(`${createFileSlug(pdfName || "signed-document")}-signed.pdf`);
 }
 
 async function downloadContractPdf(
@@ -4607,10 +4971,13 @@ function DashboardPage() {
     () => readStoredAuthSession(),
   );
   const [documents, setDocuments] = useState<VaultDocument[]>([]);
+  const [pdfDocuments, setPdfDocuments] = useState<UploadedPdfDocument[]>([]);
   const [storage, setStorage] = useState<DocumentStorageInfo | null>(null);
+  const [pdfStorage, setPdfStorage] = useState<DocumentStorageInfo | null>(null);
   const [billing, setBilling] = useState<BillingStatus | null>(null);
   const [billingConfig, setBillingConfig] = useState<BillingConfig | null>(null);
   const [selectedId, setSelectedId] = useState("");
+  const [selectedPdfId, setSelectedPdfId] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isBillingRedirecting, setIsBillingRedirecting] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -4623,8 +4990,22 @@ function DashboardPage() {
   const [createMessage, setCreateMessage] = useState("");
   const [error, setError] = useState("");
 
-  const selectedDocument =
-    documents.find((document) => document.id === selectedId) ?? documents[0];
+  const selectedPdfDocument =
+    pdfDocuments.find((document) => document.id === selectedPdfId) ??
+    (!selectedId && documents.length === 0 ? pdfDocuments[0] ?? null : null);
+  const selectedDocument = selectedPdfDocument
+    ? null
+    : documents.find((document) => document.id === selectedId) ??
+      documents[0] ??
+      null;
+  const totalDocumentCount = documents.length + pdfDocuments.length;
+  const latestDocumentTimestamps = [...documents, ...pdfDocuments]
+    .map((document) => document.updatedAt || document.createdAt)
+    .filter(Boolean)
+    .sort();
+  const latestDocumentTimestamp =
+    latestDocumentTimestamps[latestDocumentTimestamps.length - 1] ?? "";
+  const hasDurableStorage = Boolean(storage?.durable || pdfStorage?.durable);
 
   usePageMetadata({
     canonicalPath: "/dashboard",
@@ -4642,6 +5023,7 @@ function DashboardPage() {
       if (!activeSession) {
         setSession(null);
         setDocuments([]);
+        setPdfDocuments([]);
         return;
       }
 
@@ -4650,10 +5032,18 @@ function DashboardPage() {
       saveStoredAuthSession(nextSession);
       setSession(nextSession);
 
-      const vaultData = await fetchVaultDocuments(nextSession);
+      const [vaultData, pdfVaultData] = await Promise.all([
+        fetchVaultDocuments(nextSession),
+        fetchUploadedPdfDocuments(nextSession),
+      ]);
       setDocuments(vaultData.documents);
+      setPdfDocuments(pdfVaultData.documents);
       setStorage(vaultData.storage);
+      setPdfStorage(pdfVaultData.storage);
       setSelectedId((current) => current || vaultData.documents[0]?.id || "");
+      setSelectedPdfId((current) =>
+        current || (vaultData.documents.length === 0 ? pdfVaultData.documents[0]?.id || "" : ""),
+      );
 
       try {
         const billingData = await fetchBillingStatus(nextSession);
@@ -4683,8 +5073,10 @@ function DashboardPage() {
     await logoutAuthSession(session);
     setSession(null);
     setDocuments([]);
+    setPdfDocuments([]);
     setBilling(null);
     setSelectedId("");
+    setSelectedPdfId("");
   }
 
   async function startDashboardCheckout() {
@@ -4728,11 +5120,32 @@ function DashboardPage() {
       await deleteVaultDocument(session, documentId);
       setDocuments((current) => current.filter((document) => document.id !== documentId));
       setSelectedId("");
+      setSelectedPdfId((current) => current || "");
     } catch (requestError) {
       setError(
         requestError instanceof Error
           ? requestError.message
           : "Could not delete document.",
+      );
+    }
+  }
+
+  async function removePdfDocument(documentId: string) {
+    if (!session || !window.confirm("Delete this uploaded PDF?")) {
+      return;
+    }
+
+    try {
+      await deleteUploadedPdfDocument(session, documentId);
+      setPdfDocuments((current) =>
+        current.filter((document) => document.id !== documentId),
+      );
+      setSelectedPdfId("");
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not delete uploaded PDF.",
       );
     }
   }
@@ -4782,6 +5195,7 @@ function DashboardPage() {
         ...current.filter((document) => document.id !== response.document.id),
       ]);
       setSelectedId(response.document.id);
+      setSelectedPdfId("");
       setCreateMessage("Document created.");
       setIsCreateModalOpen(false);
 
@@ -4874,15 +5288,21 @@ function DashboardPage() {
         </section>
 
         <section className="admin-metrics">
-          <Metric label="Documents" value={`${documents.length}`} />
+          <Metric label="Documents" value={`${totalDocumentCount}`} />
           <Metric
             label="Latest"
-            value={documents[0]?.updatedAt ? formatTimestamp(documents[0].updatedAt) : "None"}
+            value={latestDocumentTimestamp ? formatTimestamp(latestDocumentTimestamp) : "None"}
           />
           <Metric label="Account" value={session?.user.email ?? "Signed in"} />
           <Metric
             label="Storage"
-            value={storage?.durable ? "Supabase" : storage ? "Local JSON" : "Checking"}
+            value={
+              hasDurableStorage
+                ? "Supabase"
+                : storage || pdfStorage
+                  ? "Local JSON"
+                  : "Checking"
+            }
           />
           <Metric
             label="Plan"
@@ -4932,11 +5352,11 @@ function DashboardPage() {
           <aside className="vault-list-panel">
             <div className="vault-list-heading">
               <h2>Saved Documents</h2>
-              <span>{documents.length}</span>
+              <span>{totalDocumentCount}</span>
             </div>
             {isLoading ? (
               <div className="empty-state">Loading documents...</div>
-            ) : documents.length === 0 ? (
+            ) : totalDocumentCount === 0 ? (
               <div className="empty-state">
                 No documents saved yet. Open a template, fill the form, and
                 click Save to Vault, or create a document here.
@@ -4950,27 +5370,210 @@ function DashboardPage() {
                 </button>
               </div>
             ) : (
-              <div className="vault-document-list">
-                {documents.map((document) => (
-                  <button
-                    className={`vault-document-row ${
-                      selectedDocument?.id === document.id ? "active" : ""
-                    }`}
-                    key={document.id}
-                    type="button"
-                    onClick={() => setSelectedId(document.id)}
-                  >
-                    <strong>{document.title}</strong>
-                    <span>{document.templateTitle || document.contract.contractTitle}</span>
-                    <small>{formatTimestamp(document.updatedAt || document.createdAt)}</small>
-                  </button>
-                ))}
+              <div className="vault-document-sections">
+                {documents.length > 0 ? (
+                  <section>
+                    <h3>Generated Contracts</h3>
+                    <div className="vault-document-list">
+                      {documents.map((document) => (
+                        <button
+                          className={`vault-document-row ${
+                            selectedDocument?.id === document.id ? "active" : ""
+                          }`}
+                          key={document.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedId(document.id);
+                            setSelectedPdfId("");
+                          }}
+                        >
+                          <strong>{document.title}</strong>
+                          <span>
+                            {document.templateTitle || document.contract.contractTitle}
+                          </span>
+                          <small>
+                            {formatTimestamp(document.updatedAt || document.createdAt)}
+                          </small>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
+
+                {pdfDocuments.length > 0 ? (
+                  <section>
+                    <h3>Uploaded PDFs</h3>
+                    <div className="vault-document-list">
+                      {pdfDocuments.map((document) => (
+                        <button
+                          className={`vault-document-row ${
+                            selectedPdfDocument?.id === document.id ? "active" : ""
+                          }`}
+                          key={document.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedPdfId(document.id);
+                            setSelectedId("");
+                          }}
+                        >
+                          <strong>{document.title || document.fileName}</strong>
+                          <span>
+                            {document.status || "Draft"} | {document.pageCount} page
+                            {document.pageCount === 1 ? "" : "s"} |{" "}
+                            {document.fields.length} field
+                            {document.fields.length === 1 ? "" : "s"}
+                          </span>
+                          <small>
+                            {formatTimestamp(document.updatedAt || document.createdAt)}
+                          </small>
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                ) : null}
               </div>
             )}
           </aside>
 
           <section className="vault-preview-panel">
-            {selectedDocument ? (
+            {selectedPdfDocument ? (
+              <>
+                <div className="vault-preview-header">
+                  <div>
+                    <h2>{selectedPdfDocument.title || selectedPdfDocument.fileName}</h2>
+                    <p>
+                      Uploaded PDF{" | "}
+                      {formatTimestamp(
+                        selectedPdfDocument.updatedAt ||
+                          selectedPdfDocument.createdAt,
+                      )}
+                    </p>
+                  </div>
+                  <div className="vault-actions">
+                    <a
+                      className="button secondary"
+                      href={`/editor?pdf=${encodeURIComponent(selectedPdfDocument.id)}`}
+                    >
+                      <PenLine size={17} />
+                      <span>Open Editor</span>
+                    </a>
+                    <button
+                      className="button secondary"
+                      disabled={!session}
+                      type="button"
+                      onClick={() =>
+                        session
+                          ? void downloadUploadedPdfOriginal(
+                              session,
+                              selectedPdfDocument.id,
+                              selectedPdfDocument.fileName,
+                            )
+                          : undefined
+                      }
+                    >
+                      <Download size={17} />
+                      <span>Original</span>
+                    </button>
+                    <button
+                      className="icon-button danger"
+                      type="button"
+                      aria-label="Delete uploaded PDF"
+                      onClick={() => void removePdfDocument(selectedPdfDocument.id)}
+                    >
+                      <Trash2 size={17} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="metric-grid">
+                  <Metric label="Status" value={selectedPdfDocument.status || "Draft"} />
+                  <Metric
+                    label="Pages"
+                    value={`${selectedPdfDocument.pageCount || selectedPdfDocument.pages.length}`}
+                  />
+                  <Metric
+                    label="Fields"
+                    value={`${selectedPdfDocument.fields.length}`}
+                  />
+                  <Metric
+                    label="Client"
+                    value={
+                      selectedPdfDocument.signingRecipientEmail ||
+                      "Not sent"
+                    }
+                  />
+                </div>
+
+                {selectedPdfDocument.signingExpiresAt ? (
+                  <div className="signing-link-card">
+                    <span>Signing workflow</span>
+                    <small>
+                      Sent to{" "}
+                      {selectedPdfDocument.signingRecipientEmail || "client"}.
+                      Expires {formatTimestamp(selectedPdfDocument.signingExpiresAt)}.
+                    </small>
+                    {selectedPdfDocument.documentHash ? (
+                      <input readOnly value={selectedPdfDocument.documentHash} />
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <section className="evidence-table">
+                  <h2>Field Map</h2>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Field</th>
+                        <th>Page</th>
+                        <th>Assigned</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedPdfDocument.fields.slice(0, 20).map((field) => (
+                        <tr key={field.id}>
+                          <td>{field.label}</td>
+                          <td>Page {field.pageNumber}</td>
+                          <td>{field.assignee === "client" ? "Client" : "Sender"}</td>
+                          <td>
+                            {isPdfFieldCompleted(
+                              field,
+                              selectedPdfDocument.fieldValues[field.id],
+                            )
+                              ? "Complete"
+                              : field.required
+                                ? "Required"
+                                : "Optional"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </section>
+
+                <section className="evidence-table">
+                  <h2>Audit Trail</h2>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Time</th>
+                        <th>Actor</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedPdfDocument.auditEvents.slice(0, 12).map((event) => (
+                        <tr key={event.id}>
+                          <td>{formatTimestamp(event.at)}</td>
+                          <td>{event.actor}</td>
+                          <td>{event.action}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </section>
+              </>
+            ) : selectedDocument ? (
               <>
                 <div className="vault-preview-header">
                   <div>
@@ -5239,10 +5842,29 @@ function PdfFieldEditorPage() {
   const [isRendering, setIsRendering] = useState(false);
   const [pages, setPages] = useState<PdfPagePreview[]>([]);
   const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
+  const [pdfFileDataUrl, setPdfFileDataUrl] = useState("");
   const [pdfName, setPdfName] = useState("");
   const [renderError, setRenderError] = useState("");
+  const [savedPdfDocument, setSavedPdfDocument] =
+    useState<UploadedPdfDocument | null>(null);
   const [selectedFieldId, setSelectedFieldId] = useState("");
   const [signingFieldId, setSigningFieldId] = useState("");
+  const [vaultState, setVaultState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
+  const [vaultMessage, setVaultMessage] = useState("");
+  const [isPdfLinkModalOpen, setIsPdfLinkModalOpen] = useState(false);
+  const [pdfLinkForm, setPdfLinkForm] = useState({
+    recipientEmail: "",
+    recipientName: "",
+  });
+  const [pdfLinkState, setPdfLinkState] = useState<
+    "idle" | "creating" | "created" | "error"
+  >("idle");
+  const [pdfLinkMessage, setPdfLinkMessage] = useState("");
+  const [pdfSigningLink, setPdfSigningLink] = useState<SigningLinkInfo | null>(
+    null,
+  );
   const canvasRefs = useRef<Record<number, HTMLCanvasElement | null>>({});
   const pageRefs = useRef<Record<number, HTMLElement | null>>({});
 
@@ -5335,6 +5957,95 @@ function PdfFieldEditorPage() {
   }, [pdfDocument]);
 
   useEffect(() => {
+    const savedPdfId = new URLSearchParams(window.location.search).get("pdf");
+    if (!savedPdfId) {
+      return;
+    }
+
+    const documentId = savedPdfId;
+    let isCancelled = false;
+
+    async function loadSavedPdfDocument() {
+      setIsRendering(true);
+      setRenderError("");
+      setVaultMessage("");
+
+      try {
+        const activeSession = await getUsableAuthSession();
+        if (!activeSession) {
+          window.location.href = getLoginUrl(
+            `/editor?pdf=${encodeURIComponent(documentId)}`,
+          );
+          return;
+        }
+
+        const pdfVaultData = await fetchUploadedPdfDocuments(activeSession);
+        const savedDocument = pdfVaultData.documents.find(
+          (document) => document.id === documentId,
+        );
+
+        if (!savedDocument) {
+          throw new Error("Uploaded PDF not found in your vault.");
+        }
+
+        const fileResponse = await fetch(
+          `/api/pdf-documents/${encodeURIComponent(documentId)}/file`,
+          {
+            headers: {
+              Authorization: `Bearer ${activeSession.accessToken}`,
+            },
+          },
+        );
+
+        if (!fileResponse.ok) {
+          throw new Error(await readApiError(fileResponse, "Could not load PDF."));
+        }
+
+        const { document: loadedDocument, pages: nextPages } =
+          await loadPdfDocumentFromArrayBuffer(await fileResponse.arrayBuffer());
+
+        if (isCancelled) {
+          void loadedDocument.cleanup();
+          return;
+        }
+
+        canvasRefs.current = {};
+        setPdfDocument(loadedDocument);
+        setPdfFileDataUrl("");
+        setPdfName(savedDocument.fileName || savedDocument.title || "uploaded.pdf");
+        setPages(nextPages);
+        setFields(savedDocument.fields ?? []);
+        setFieldValues(savedDocument.fieldValues ?? {});
+        setSavedPdfDocument(savedDocument);
+        setActivePageNumber(nextPages[0]?.pageNumber ?? 1);
+        setSelectedFieldId(savedDocument.fields?.[0]?.id ?? "");
+        setSigningFieldId("");
+        setEditorMode("prepare");
+        setVaultState("saved");
+        setVaultMessage("Loaded from your PDF vault.");
+      } catch (requestError) {
+        if (!isCancelled) {
+          setRenderError(
+            requestError instanceof Error
+              ? requestError.message
+              : "Could not load this saved PDF.",
+          );
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsRendering(false);
+        }
+      }
+    }
+
+    void loadSavedPdfDocument();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (editorMode === "sign" && fields.length === 0) {
       setEditorMode("prepare");
     }
@@ -5363,27 +6074,22 @@ function PdfFieldEditorPage() {
     setFields([]);
     setFieldValues({});
     setActivePageNumber(1);
+    setPdfFileDataUrl("");
+    setSavedPdfDocument(null);
     setSelectedFieldId("");
     setSigningFieldId("");
+    setVaultState("idle");
+    setVaultMessage("");
+    setPdfSigningLink(null);
+    setPdfLinkMessage("");
 
     try {
-      const pdfjsLib = await loadPdfJsModule();
-      const fileData = await file.arrayBuffer();
-      const loadingTask = pdfjsLib.getDocument({
-        data: new Uint8Array(fileData),
-      });
-      const loadedDocument = await loadingTask.promise;
-      const nextPages: PdfPagePreview[] = [];
-
-      for (let pageNumber = 1; pageNumber <= loadedDocument.numPages; pageNumber += 1) {
-        const page = await loadedDocument.getPage(pageNumber);
-        const viewport = page.getViewport({ scale: PDF_RENDER_SCALE });
-        nextPages.push({
-          height: viewport.height,
-          pageNumber,
-          width: viewport.width,
-        });
-      }
+      const [fileData, dataUrl] = await Promise.all([
+        file.arrayBuffer(),
+        readFileAsDataUrl(file),
+      ]);
+      const { document: loadedDocument, pages: nextPages } =
+        await loadPdfDocumentFromArrayBuffer(fileData);
 
       if (pdfDocument) {
         void pdfDocument.cleanup();
@@ -5391,13 +6097,16 @@ function PdfFieldEditorPage() {
 
       canvasRefs.current = {};
       setPdfDocument(loadedDocument);
+      setPdfFileDataUrl(dataUrl);
       setPdfName(file.name);
       setPages(nextPages);
       setActivePageNumber(nextPages[0]?.pageNumber ?? 1);
     } catch (error) {
       setPages([]);
       setPdfDocument(null);
+      setPdfFileDataUrl("");
       setPdfName("");
+      setSavedPdfDocument(null);
       setFieldValues({});
       setActivePageNumber(1);
       setRenderError(
@@ -5616,6 +6325,144 @@ function PdfFieldEditorPage() {
     );
   }
 
+  function createUploadedPdfPayload(status = savedPdfDocument?.status || "Draft") {
+    return {
+      fieldValues,
+      fields,
+      fileName: pdfName,
+      pageCount: pages.length,
+      pages,
+      pdfDataUrl: pdfFileDataUrl,
+      status,
+      title:
+        savedPdfDocument?.title ||
+        (pdfName ? pdfName.replace(/\.pdf$/i, "") : "Uploaded PDF"),
+    };
+  }
+
+  async function saveCurrentPdfToVault(options: { silent?: boolean } = {}) {
+    if (!pdfName || pages.length === 0) {
+      setVaultState("error");
+      setVaultMessage("Upload a PDF before saving.");
+      return null;
+    }
+
+    if (!savedPdfDocument && !pdfFileDataUrl) {
+      setVaultState("error");
+      setVaultMessage("The uploaded PDF data is no longer available. Re-upload it.");
+      return null;
+    }
+
+    setVaultState("saving");
+    if (!options.silent) {
+      setVaultMessage("");
+    }
+
+    try {
+      const activeSession = await getUsableAuthSession();
+      if (!activeSession) {
+        window.location.href = getLoginUrl("/editor");
+        return null;
+      }
+
+      const payload = createUploadedPdfPayload(
+        savedPdfDocument?.status === "Sent" || savedPdfDocument?.status === "Viewed"
+          ? savedPdfDocument.status
+          : "Draft",
+      );
+      const response = savedPdfDocument
+        ? await updateUploadedPdfDocument(activeSession, savedPdfDocument.id, {
+            ...payload,
+            pdfDataUrl: undefined,
+          })
+        : await saveUploadedPdfDocument(activeSession, payload);
+
+      setSavedPdfDocument(response.document);
+      setVaultState("saved");
+      if (!options.silent) {
+        setVaultMessage("Saved to your PDF vault.");
+      }
+      return response.document;
+    } catch (requestError) {
+      setVaultState("error");
+      setVaultMessage(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not save uploaded PDF.",
+      );
+      return null;
+    }
+  }
+
+  function openPdfSigningLinkModal() {
+    if (fields.filter((field) => field.assignee === "client").length === 0) {
+      setVaultState("error");
+      setVaultMessage("Place at least one Client field before creating a link.");
+      return;
+    }
+
+    setPdfLinkState("idle");
+    setPdfLinkMessage("");
+    setPdfSigningLink(null);
+    setIsPdfLinkModalOpen(true);
+  }
+
+  async function createPdfSigningLink() {
+    const recipientEmail = pdfLinkForm.recipientEmail.trim();
+    const recipientName = pdfLinkForm.recipientName.trim();
+
+    if (!recipientEmail) {
+      setPdfLinkState("error");
+      setPdfLinkMessage("Client email is required.");
+      return;
+    }
+
+    setPdfLinkState("creating");
+    setPdfLinkMessage("");
+
+    try {
+      const activeSession = await getUsableAuthSession();
+      if (!activeSession) {
+        window.location.href = getLoginUrl("/editor");
+        return;
+      }
+
+      const savedDocument = await saveCurrentPdfToVault({ silent: true });
+
+      if (!savedDocument) {
+        setPdfLinkState("error");
+        setPdfLinkMessage("Save the PDF before creating a signing link.");
+        return;
+      }
+
+      const response = await createUploadedPdfSigningLink(activeSession, {
+        documentId: savedDocument.id,
+        recipientEmail,
+        recipientName,
+      });
+
+      setSavedPdfDocument(response.document);
+      setPdfSigningLink(response.link ?? null);
+      setPdfLinkState("created");
+      setPdfLinkMessage(
+        response.emailDelivery?.sent
+          ? "Signing link created and emailed to the client."
+          : "Signing link created. Copy it and send it to the client.",
+      );
+
+      if (response.link?.url) {
+        await navigator.clipboard?.writeText(response.link.url).catch(() => undefined);
+      }
+    } catch (requestError) {
+      setPdfLinkState("error");
+      setPdfLinkMessage(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not create signing link.",
+      );
+    }
+  }
+
   function applyPdfFieldValue(fieldId: string, value: PdfFieldValue) {
     setFieldValues((current) => ({ ...current, [fieldId]: value }));
     setSigningFieldId("");
@@ -5673,99 +6520,13 @@ function PdfFieldEditorPage() {
 
     setRenderError("");
 
-    const { jsPDF } = await import("jspdf");
-    const firstPage = pages[0];
-    const firstWidth = firstPage.width / PDF_RENDER_SCALE;
-    const firstHeight = firstPage.height / PDF_RENDER_SCALE;
-    const doc = new jsPDF({
-      format: [firstWidth, firstHeight],
-      orientation: firstWidth > firstHeight ? "landscape" : "portrait",
-      unit: "pt",
+    await downloadFlattenedUploadedPdf({
+      canvasRefs: canvasRefs.current,
+      fieldValues,
+      fields,
+      pages,
+      pdfName,
     });
-
-    pages.forEach((page, pageIndex) => {
-      const pageWidth = page.width / PDF_RENDER_SCALE;
-      const pageHeight = page.height / PDF_RENDER_SCALE;
-      const canvas = canvasRefs.current[page.pageNumber];
-
-      if (pageIndex > 0) {
-        doc.addPage(
-          [pageWidth, pageHeight],
-          pageWidth > pageHeight ? "landscape" : "portrait",
-        );
-      }
-
-      doc.setPage(pageIndex + 1);
-
-      if (canvas) {
-        doc.addImage(
-          canvas.toDataURL("image/jpeg", 0.95),
-          "JPEG",
-          0,
-          0,
-          pageWidth,
-          pageHeight,
-        );
-      }
-
-      fields
-        .filter((field) => field.pageNumber === page.pageNumber)
-        .forEach((field) => {
-          const value = fieldValues[field.id];
-          if (!isPdfFieldCompleted(field, value)) {
-            return;
-          }
-
-          const x = (field.x / 100) * pageWidth;
-          const y = (field.y / 100) * pageHeight;
-          const width = (field.width / 100) * pageWidth;
-          const height = (field.height / 100) * pageHeight;
-
-          if (
-            (field.type === "signature" || field.type === "initials") &&
-            value?.signatureDataUrl
-          ) {
-            const padding = Math.min(5, height * 0.15);
-            doc.addImage(
-              value.signatureDataUrl,
-              "PNG",
-              x + padding,
-              y + padding,
-              Math.max(1, width - padding * 2),
-              Math.max(1, height - padding * 2),
-            );
-            return;
-          }
-
-          if (field.type === "checkbox") {
-            const boxSize = Math.min(width, height, 14);
-            doc.setDrawColor(15, 118, 110);
-            doc.setLineWidth(1);
-            doc.rect(x, y, boxSize, boxSize);
-            if (value?.checked) {
-              doc.setLineWidth(1.8);
-              doc.line(x + boxSize * 0.2, y + boxSize * 0.55, x + boxSize * 0.42, y + boxSize * 0.78);
-              doc.line(x + boxSize * 0.42, y + boxSize * 0.78, x + boxSize * 0.82, y + boxSize * 0.24);
-            }
-            return;
-          }
-
-          const textValue = formatPdfFieldValue(field, value);
-          if (!textValue) {
-            return;
-          }
-
-          const fontSize = clampNumber(height * 0.44, 8, 16);
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(fontSize);
-          doc.setTextColor(15, 23, 42);
-          doc.text(textValue, x + 3, y + Math.min(height - 2, fontSize + 3), {
-            maxWidth: Math.max(1, width - 6),
-          });
-        });
-    });
-
-    doc.save(`${createFileSlug(pdfName || "signed-document")}-signed.pdf`);
   }
 
   return (
@@ -5787,6 +6548,24 @@ function PdfFieldEditorPage() {
               <span>Upload PDF</span>
               <input accept="application/pdf" type="file" onChange={uploadPdf} />
             </label>
+            <button
+              className="button secondary"
+              disabled={pages.length === 0 || vaultState === "saving"}
+              type="button"
+              onClick={() => void saveCurrentPdfToVault()}
+            >
+              <Save size={17} />
+              <span>{vaultState === "saving" ? "Saving..." : "Save PDF"}</span>
+            </button>
+            <button
+              className="button primary"
+              disabled={pages.length === 0 || fields.length === 0}
+              type="button"
+              onClick={openPdfSigningLinkModal}
+            >
+              <Send size={17} />
+              <span>Send Link</span>
+            </button>
             <button
               className="button secondary"
               disabled={pages.length === 0 || fields.length === 0}
@@ -5818,6 +6597,22 @@ function PdfFieldEditorPage() {
         </section>
 
         {renderError ? <div className="admin-alert">{renderError}</div> : null}
+        {vaultMessage ? (
+          <div
+            className={`builder-vault-status no-print ${
+              vaultState === "error" ? "error" : "success"
+            }`}
+          >
+            {vaultMessage}
+          </div>
+        ) : null}
+        {pdfSigningLink?.url && !isPdfLinkModalOpen ? (
+          <div className="signing-link-card pdf-editor-link-card no-print">
+            <span>Client signing link</span>
+            <input readOnly value={pdfSigningLink.url} />
+            <small>Expires {formatTimestamp(pdfSigningLink.expiresAt)}</small>
+          </div>
+        ) : null}
 
         <section className="pdf-editor-layout">
           <aside className="pdf-editor-sidebar">
@@ -6243,6 +7038,19 @@ function PdfFieldEditorPage() {
           onClose={() => setSigningFieldId("")}
         />
       ) : null}
+      {isPdfLinkModalOpen ? (
+        <PdfSigningLinkModal
+          form={pdfLinkForm}
+          link={pdfSigningLink}
+          message={pdfLinkMessage}
+          state={pdfLinkState}
+          onChange={(field, value) =>
+            setPdfLinkForm((current) => ({ ...current, [field]: value }))
+          }
+          onClose={() => setIsPdfLinkModalOpen(false)}
+          onCreate={() => void createPdfSigningLink()}
+        />
+      ) : null}
     </div>
   );
 }
@@ -6450,6 +7258,137 @@ function PdfFieldSigningModal({
             </button>
           </div>
         </form>
+      </section>
+    </div>
+  );
+}
+
+function PdfSigningLinkModal({
+  form,
+  link,
+  message,
+  onChange,
+  onClose,
+  onCreate,
+  state,
+}: {
+  form: { recipientEmail: string; recipientName: string };
+  link: SigningLinkInfo | null;
+  message: string;
+  onChange: (field: "recipientEmail" | "recipientName", value: string) => void;
+  onClose: () => void;
+  onCreate: () => void;
+  state: "idle" | "creating" | "created" | "error";
+}) {
+  const isBusy = state === "creating";
+
+  async function copyLink() {
+    if (link?.url) {
+      await navigator.clipboard?.writeText(link.url).catch(() => undefined);
+    }
+  }
+
+  return (
+    <div
+      className="modal-backdrop no-print"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <section
+        className="post-download-modal create-document-modal pdf-signing-link-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pdf-link-modal-title"
+      >
+        <button
+          className="modal-close"
+          type="button"
+          title="Close"
+          onClick={onClose}
+        >
+          <X size={18} />
+        </button>
+
+        <div className="modal-icon" aria-hidden="true">
+          <Send size={24} />
+        </div>
+
+        <div className="modal-copy">
+          <span>Client signing link</span>
+          <h2 id="pdf-link-modal-title">Send this PDF for signature</h2>
+          <p>
+            Create a secure link your client can open to complete only the
+            fields assigned to them. The signed status and audit trail are saved
+            in your vault.
+          </p>
+        </div>
+
+        <div className="create-document-form">
+          <div className="create-document-grid">
+            <Field label="Client name">
+              <input
+                placeholder="Client name"
+                value={form.recipientName}
+                onChange={(event) => onChange("recipientName", event.target.value)}
+              />
+            </Field>
+            <Field label="Client email">
+              <input
+                required
+                type="email"
+                placeholder="client@company.com"
+                value={form.recipientEmail}
+                onChange={(event) =>
+                  onChange("recipientEmail", event.target.value)
+                }
+              />
+            </Field>
+          </div>
+
+          {message ? (
+            <div
+              className={`modal-status ${
+                state === "error" ? "local" : "success"
+              }`}
+            >
+              {message}
+            </div>
+          ) : null}
+
+          {link?.url ? (
+            <div className="signing-link-card">
+              <span>Copyable signing link</span>
+              <div className="copy-link-row">
+                <input readOnly value={link.url} />
+                <button className="button secondary" type="button" onClick={copyLink}>
+                  <Copy size={17} />
+                  <span>Copy</span>
+                </button>
+              </div>
+              <small>Expires {formatTimestamp(link.expiresAt)}</small>
+            </div>
+          ) : null}
+
+          <div className="create-document-actions">
+            <button className="button secondary" type="button" onClick={onClose}>
+              <X size={17} />
+              <span>Close</span>
+            </button>
+            <button
+              className="button primary"
+              disabled={isBusy}
+              type="button"
+              onClick={onCreate}
+            >
+              <Send size={17} />
+              <span>{isBusy ? "Creating..." : "Create Signing Link"}</span>
+            </button>
+          </div>
+        </div>
       </section>
     </div>
   );
@@ -8804,6 +9743,523 @@ function SignatureCapture({
   );
 }
 
+function UploadedPdfSigningPage({ token }: { token: string }) {
+  const [pdfRecord, setPdfRecord] = useState<UploadedPdfDocument | null>(null);
+  const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
+  const [pages, setPages] = useState<PdfPagePreview[]>([]);
+  const [fieldValues, setFieldValues] = useState<Record<string, PdfFieldValue>>(
+    {},
+  );
+  const [signerName, setSignerName] = useState("");
+  const [signerEmail, setSignerEmail] = useState("");
+  const [signingFieldId, setSigningFieldId] = useState("");
+  const [consentChecked, setConsentChecked] = useState(false);
+  const [documentHash, setDocumentHash] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRendering, setIsRendering] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+  const canvasRefs = useRef<Record<number, HTMLCanvasElement | null>>({});
+
+  const pdfFields = pdfRecord?.fields ?? [];
+  const clientFields = pdfFields.filter((field) => field.assignee === "client");
+  const requiredClientFields = clientFields.filter((field) => field.required);
+  const completedRequiredClientFields = requiredClientFields.filter((field) =>
+    isPdfFieldCompleted(field, fieldValues[field.id]),
+  );
+  const signingField =
+    pdfFields.find((field) => field.id === signingFieldId) ?? null;
+  const isAlreadySigned = Boolean(
+    pdfRecord?.signingCompletedAt || pdfRecord?.status === "Signed",
+  );
+
+  usePageMetadata({
+    canonicalPath: "/pdf-sign",
+    title: "PDF Signature | Term Craft",
+    description: "Secure PDF signing page for a Term Craft uploaded document.",
+    robots: "noindex,nofollow",
+  });
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadSigningLink() {
+      setIsLoading(true);
+      setIsRendering(true);
+      setError("");
+      setMessage("");
+
+      try {
+        if (!token) {
+          throw new Error("Invalid signing link.");
+        }
+
+        const response = await fetchUploadedPdfSigningDocument(token);
+        if (isCancelled) {
+          return;
+        }
+
+        setPdfRecord(response.document);
+        setFieldValues(response.document.fieldValues ?? {});
+        setSignerName(
+          response.recipientName || response.document.signingRecipientName || "",
+        );
+        setSignerEmail(
+          response.recipientEmail || response.document.signingRecipientEmail || "",
+        );
+        setDocumentHash(response.document.documentHash ?? "");
+
+        const fileResponse = await fetch(
+          `/api/pdf-signing-links/${encodeURIComponent(token)}/file`,
+        );
+
+        if (!fileResponse.ok) {
+          throw new Error(await readApiError(fileResponse, "Could not load PDF."));
+        }
+
+        const { document: loadedDocument, pages: nextPages } =
+          await loadPdfDocumentFromArrayBuffer(await fileResponse.arrayBuffer());
+
+        if (isCancelled) {
+          void loadedDocument.cleanup();
+          return;
+        }
+
+        canvasRefs.current = {};
+        setPdfDocument(loadedDocument);
+        setPages(nextPages);
+      } catch (requestError) {
+        if (!isCancelled) {
+          setError(
+            requestError instanceof Error
+              ? requestError.message
+              : "Could not load this signing link.",
+          );
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false);
+          setIsRendering(false);
+        }
+      }
+    }
+
+    void loadSigningLink();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [token]);
+
+  useEffect(() => {
+    const activeDocument = pdfDocument;
+
+    if (!activeDocument || pages.length === 0) {
+      return;
+    }
+
+    const documentToRender: PDFDocumentProxy = activeDocument;
+    let isCancelled = false;
+
+    async function renderPages() {
+      setIsRendering(true);
+
+      try {
+        for (const pagePreview of pages) {
+          if (isCancelled) {
+            return;
+          }
+
+          const canvas = canvasRefs.current[pagePreview.pageNumber];
+          if (!canvas) {
+            continue;
+          }
+
+          const page = await documentToRender.getPage(pagePreview.pageNumber);
+          const viewport = page.getViewport({ scale: PDF_RENDER_SCALE });
+          const context = canvas.getContext("2d");
+          if (!context) {
+            continue;
+          }
+
+          canvas.width = Math.floor(viewport.width);
+          canvas.height = Math.floor(viewport.height);
+          context.clearRect(0, 0, canvas.width, canvas.height);
+          await page.render({ canvas, canvasContext: context, viewport }).promise;
+        }
+      } catch (renderError) {
+        if (!isCancelled) {
+          setError(
+            renderError instanceof Error
+              ? renderError.message
+              : "Could not render this PDF.",
+          );
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsRendering(false);
+        }
+      }
+    }
+
+    void renderPages();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [pages, pdfDocument]);
+
+  useEffect(() => {
+    return () => {
+      if (pdfDocument) {
+        void pdfDocument.cleanup();
+      }
+    };
+  }, [pdfDocument]);
+
+  function applyPdfFieldValue(fieldId: string, value: PdfFieldValue) {
+    setFieldValues((current) => ({ ...current, [fieldId]: value }));
+    setSigningFieldId("");
+    setError("");
+  }
+
+  function activateClientField(field: PdfPlacedField) {
+    if (isAlreadySigned || field.assignee !== "client") {
+      return;
+    }
+
+    setError("");
+
+    if (field.type === "checkbox") {
+      const currentValue = fieldValues[field.id];
+      setFieldValues((current) => ({
+        ...current,
+        [field.id]: {
+          checked: !currentValue?.checked,
+          completedAt: new Date().toISOString(),
+          fieldId: field.id,
+        },
+      }));
+      return;
+    }
+
+    setSigningFieldId(field.id);
+  }
+
+  async function submitPdfSignature() {
+    if (!pdfRecord) {
+      return;
+    }
+
+    setError("");
+    setMessage("");
+
+    if (!signerName.trim() || !signerEmail.trim()) {
+      setError("Enter your name and email before submitting.");
+      return;
+    }
+
+    if (!consentChecked) {
+      setError("Accept electronic signing consent before submitting.");
+      return;
+    }
+
+    const missingRequired = requiredClientFields.filter(
+      (field) => !isPdfFieldCompleted(field, fieldValues[field.id]),
+    );
+
+    if (missingRequired.length > 0) {
+      setError(
+        `${missingRequired.length} required field${
+          missingRequired.length === 1 ? "" : "s"
+        } still need to be completed.`,
+      );
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const response = await submitUploadedPdfSignature({
+        consent: consentChecked,
+        fieldValues,
+        signerEmail: signerEmail.trim(),
+        signerName: signerName.trim(),
+        token,
+      });
+
+      setPdfRecord(response.document);
+      setFieldValues(response.document.fieldValues ?? {});
+      setDocumentHash(response.documentHash ?? response.document.documentHash ?? "");
+      setConsentChecked(false);
+      setMessage("Signed PDF submitted. The sender can now see it in their vault.");
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not submit this signature.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function downloadSignedPdf() {
+    if (!pdfRecord || pages.length === 0) {
+      return;
+    }
+
+    try {
+      await downloadFlattenedUploadedPdf({
+        canvasRefs: canvasRefs.current,
+        fieldValues,
+        fields: pdfRecord.fields,
+        pages,
+        pdfName: pdfRecord.fileName,
+      });
+    } catch (downloadError) {
+      setError(
+        downloadError instanceof Error
+          ? downloadError.message
+          : "Could not download signed PDF.",
+      );
+    }
+  }
+
+  return (
+    <div className="public-page signing-link-page">
+      <PublicHeader />
+      <main className="shared-signing-shell pdf-client-signing-shell">
+        <aside className="shared-signing-panel">
+          <div className="template-kicker">PDF signing link</div>
+          <h1>Review and sign this PDF</h1>
+          <p>
+            Complete the fields assigned to you, accept electronic signing
+            consent, and submit the signed document back to the sender.
+          </p>
+
+          {isLoading ? (
+            <div className="empty-state">Loading signing link...</div>
+          ) : null}
+
+          {error ? <div className="admin-alert">{error}</div> : null}
+          {message ? <div className="modal-status success">{message}</div> : null}
+
+          {pdfRecord ? (
+            <>
+              <div className="metric-grid signing-link-metrics">
+                <Metric label="Status" value={pdfRecord.status || "Sent"} />
+                <Metric
+                  label="Required"
+                  value={`${completedRequiredClientFields.length}/${requiredClientFields.length}`}
+                />
+              </div>
+
+              <div className="pdf-signing-controls">
+                <div className="form-stack">
+                  <Field label="Your name">
+                    <input
+                      disabled={isAlreadySigned}
+                      value={signerName}
+                      onChange={(event) => setSignerName(event.target.value)}
+                    />
+                  </Field>
+                  <Field label="Your email">
+                    <input
+                      disabled={isAlreadySigned}
+                      type="email"
+                      value={signerEmail}
+                      onChange={(event) => setSignerEmail(event.target.value)}
+                    />
+                  </Field>
+                </div>
+
+                <section className="pdf-client-field-list" aria-label="Fields to complete">
+                  <strong>Fields to complete</strong>
+                  {clientFields.length === 0 ? (
+                    <span>No client fields are assigned on this PDF.</span>
+                  ) : (
+                    clientFields.map((field) => (
+                      <button
+                        className={`pdf-field-list-row ${
+                          signingFieldId === field.id ? "active" : ""
+                        }`}
+                        disabled={isAlreadySigned}
+                        key={field.id}
+                        type="button"
+                        onClick={() => activateClientField(field)}
+                      >
+                        <strong>{field.label}</strong>
+                        <span>
+                          Page {field.pageNumber} | {PDF_FIELD_LABELS[field.type]}
+                        </span>
+                        <small>
+                          {isPdfFieldCompleted(field, fieldValues[field.id])
+                            ? "Complete"
+                            : field.required
+                              ? "Required"
+                              : "Optional"}
+                        </small>
+                      </button>
+                    ))
+                  )}
+                </section>
+
+                {isAlreadySigned ? (
+                  <div className="modal-status success">
+                    This PDF has already been signed.
+                  </div>
+                ) : (
+                  <>
+                    <label className="consent-row">
+                      <input
+                        checked={consentChecked}
+                        type="checkbox"
+                        onChange={(event) =>
+                          setConsentChecked(event.target.checked)
+                        }
+                      />
+                      <span>
+                        I agree to sign electronically as{" "}
+                        {signerName.trim() || "the signer"}.
+                      </span>
+                    </label>
+
+                    <button
+                      className="button primary full-width"
+                      disabled={isSubmitting || isLoading}
+                      type="button"
+                      onClick={() => void submitPdfSignature()}
+                    >
+                      <FileCheck2 size={17} />
+                      <span>{isSubmitting ? "Submitting..." : "Submit Signed PDF"}</span>
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {documentHash ? (
+                <div className="signing-link-card">
+                  <span>Document hash</span>
+                  <input readOnly value={documentHash} />
+                </div>
+              ) : null}
+
+              <button
+                className="button secondary full-width"
+                disabled={pages.length === 0}
+                type="button"
+                onClick={() => void downloadSignedPdf()}
+              >
+                <Download size={17} />
+                <span>Download Signed PDF</span>
+              </button>
+            </>
+          ) : null}
+        </aside>
+
+        <section className="shared-signing-preview pdf-client-preview">
+          {isRendering ? (
+            <div className="pdf-render-status">Rendering PDF...</div>
+          ) : null}
+          {!isLoading && pages.length === 0 ? (
+            <div className="empty-state">
+              The PDF preview will appear after the signing link loads.
+            </div>
+          ) : (
+            <div className="pdf-page-stack">
+              {pages.map((page) => {
+                const pageFields = pdfFields.filter(
+                  (field) => field.pageNumber === page.pageNumber,
+                );
+
+                return (
+                  <section className="pdf-page-block" key={page.pageNumber}>
+                    <div className="pdf-page-heading">
+                      <span>Page {page.pageNumber}</span>
+                      <small>
+                        {pageFields.length} field
+                        {pageFields.length === 1 ? "" : "s"}
+                      </small>
+                    </div>
+                    <div
+                      className="pdf-page-frame active"
+                      style={{
+                        aspectRatio: `${page.width} / ${page.height}`,
+                        width: `${page.width}px`,
+                      }}
+                    >
+                      <canvas
+                        aria-label={`PDF page ${page.pageNumber}`}
+                        className="pdf-page-canvas"
+                        ref={(node) => {
+                          canvasRefs.current[page.pageNumber] = node;
+                        }}
+                      />
+                      <div className="pdf-field-layer">
+                        {pageFields.map((field) => (
+                          <div
+                            className={`pdf-placed-field ${field.type} ${
+                              signingFieldId === field.id ? "active" : ""
+                            } ${
+                              isPdfFieldCompleted(field, fieldValues[field.id])
+                                ? "filled"
+                                : ""
+                            } signing-mode ${
+                              field.assignee === "client" && !isAlreadySigned
+                                ? ""
+                                : "locked-field"
+                            }`}
+                            data-pdf-field-id={field.id}
+                            key={field.id}
+                            role="button"
+                            style={{
+                              height: `${field.height}%`,
+                              left: `${field.x}%`,
+                              top: `${field.y}%`,
+                              width: `${field.width}%`,
+                            }}
+                            tabIndex={
+                              field.assignee === "client" && !isAlreadySigned
+                                ? 0
+                                : -1
+                            }
+                            title={`${field.label} - ${PDF_FIELD_LABELS[field.type]}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              activateClientField(field);
+                            }}
+                          >
+                            <PdfPlacedFieldContent
+                              field={field}
+                              mode="sign"
+                              value={fieldValues[field.id]}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      </main>
+      <PublicFooter />
+      {signingField ? (
+        <PdfFieldSigningModal
+          field={signingField}
+          value={fieldValues[signingField.id]}
+          onApply={applyPdfFieldValue}
+          onClose={() => setSigningFieldId("")}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 function SharedSigningPage({ token }: { token: string }) {
   const [signingDocument, setSigningDocument] =
     useState<VaultDocument | null>(null);
@@ -9086,6 +10542,8 @@ function App() {
   useEffect(() => {
     if (
       pathname.startsWith("/admin") ||
+      pathname === "/pdf-sign" ||
+      pathname.startsWith("/pdf-sign/") ||
       pathname === "/sign" ||
       pathname.startsWith("/sign/")
     ) {
@@ -9112,6 +10570,14 @@ function App() {
 
   if (pathname === "/editor") {
     return <PdfFieldEditorPage />;
+  }
+
+  if (pathname === "/pdf-sign" || pathname.startsWith("/pdf-sign/")) {
+    const token =
+      pathname === "/pdf-sign"
+        ? ""
+        : decodeURIComponent(pathname.replace(/^\/pdf-sign\//, ""));
+    return <UploadedPdfSigningPage token={token} />;
   }
 
   if (pathname === "/sign" || pathname.startsWith("/sign/")) {

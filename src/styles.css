@@ -1083,6 +1083,13 @@ button:focus-visible {
   font-weight: 700;
 }
 
+.copy-link-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
 .signing-link-page {
   background: var(--bg-alt);
 }
@@ -1137,6 +1144,35 @@ button:focus-visible {
 .shared-signing-preview .document {
   width: 100%;
   box-shadow: none;
+}
+
+.pdf-client-signing-shell {
+  grid-template-columns: minmax(320px, 390px) minmax(0, 1fr);
+  max-width: 1600px;
+}
+
+.pdf-client-preview {
+  max-height: calc(100vh - 120px);
+  overflow: auto;
+  background: #e5e7eb;
+}
+
+.pdf-client-field-list,
+.pdf-signing-controls {
+  display: grid;
+  gap: 10px;
+}
+
+.pdf-client-field-list > strong {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.pdf-client-field-list > span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .signing-link-metrics {
@@ -2247,6 +2283,25 @@ button:focus-visible {
   gap: 8px;
 }
 
+.vault-document-sections {
+  display: grid;
+  gap: 16px;
+}
+
+.vault-document-sections section {
+  display: grid;
+  gap: 8px;
+}
+
+.vault-document-sections h3 {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0;
+  margin: 0;
+  text-transform: uppercase;
+}
+
 .vault-document-row {
   display: grid;
   gap: 4px;
@@ -2500,6 +2555,11 @@ button:focus-visible {
   margin: 0;
 }
 
+.pdf-editor-link-card {
+  max-width: 640px;
+  margin: -8px 0 18px;
+}
+
 .pdf-render-status {
   position: sticky;
   top: 0;
@@ -2611,6 +2671,10 @@ button:focus-visible {
 
 .pdf-placed-field.signing-mode {
   cursor: pointer;
+}
+
+.pdf-placed-field.locked-field {
+  cursor: default;
 }
 
 .pdf-placed-field.filled {

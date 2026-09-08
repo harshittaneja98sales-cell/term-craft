@@ -118,3 +118,93 @@ export async function sendEditableVersionEmail(lead) {
     id: responseBody?.id ?? "",
   };
 }
+
+export async function sendPdfSigningLinkEmail({
+  documentTitle,
+  expiresAt,
+  recipientEmail,
+  recipientName,
+  senderEmail,
+  signingUrl,
+}) {
+  if (!isEmailConfigured()) {
+    return {
+      provider: "resend",
+      sent: false,
+      skipped: true,
+      reason: "RESEND_API_KEY is not configured.",
+    };
+  }
+
+  const safeTitle = documentTitle || "document";
+  const greeting = recipientName ? `Hi ${recipientName},` : "Hi,";
+  const expiryText = expiresAt
+    ? `This signing link expires on ${new Date(expiresAt).toLocaleString("en-US", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      })}.`
+    : "";
+  const text = [
+    greeting,
+    "",
+    `${senderEmail || "The sender"} sent you ${safeTitle} for electronic signature.`,
+    `Open signing link: ${signingUrl}`,
+    expiryText,
+    "",
+    "Term Craft",
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #202124; line-height: 1.6; max-width: 620px;">
+      <p style="font-size: 13px; font-weight: 700; color: #0f766e; text-transform: uppercase;">Term Craft</p>
+      <h1 style="font-size: 24px; line-height: 1.2; margin: 0 0 12px;">Signature requested</h1>
+      <p>${escapeHtml(greeting)}</p>
+      <p><strong>${escapeHtml(senderEmail || "The sender")}</strong> sent you <strong>${escapeHtml(safeTitle)}</strong> for electronic signature.</p>
+      <p>
+        <a href="${escapeHtml(signingUrl)}" style="display: inline-block; background: #0f766e; color: #ffffff; padding: 11px 16px; border-radius: 8px; text-decoration: none; font-weight: 700;">Review and sign</a>
+      </p>
+      ${expiryText ? `<p style="font-size: 14px; color: #4d5967;">${escapeHtml(expiryText)}</p>` : ""}
+      <p style="font-size: 12px; color: #667085;">You received this because a Term Craft user created a signing link for this document.</p>
+    </div>
+  `;
+
+  const payload = {
+    from: emailFrom,
+    to: [recipientEmail],
+    subject: `Signature requested: ${safeTitle}`,
+    html,
+    text,
+    ...(emailReplyTo ? { reply_to: emailReplyTo } : {}),
+  };
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${resendApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const responseBody = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    return {
+      provider: "resend",
+      sent: false,
+      skipped: false,
+      reason:
+        responseBody?.message ??
+        responseBody?.error ??
+        `Resend returned HTTP ${response.status}.`,
+    };
+  }
+
+  return {
+    provider: "resend",
+    sent: true,
+    skipped: false,
+    id: responseBody?.id ?? "",
+  };
+}

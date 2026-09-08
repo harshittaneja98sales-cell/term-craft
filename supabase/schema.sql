@@ -175,3 +175,82 @@ drop trigger if exists billing_profiles_set_updated_at on public.billing_profile
 create trigger billing_profiles_set_updated_at
   before update on public.billing_profiles
   for each row execute function public.set_billing_profiles_updated_at();
+
+insert into storage.buckets (id, name, public)
+values ('termcraft-pdfs', 'termcraft-pdfs', false)
+on conflict (id) do update set public = false;
+
+create table if not exists public.pdf_documents (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  title text not null,
+  file_name text not null default '',
+  file_size integer not null default 0,
+  file_hash text not null default '',
+  storage_bucket text not null default 'termcraft-pdfs',
+  storage_path text not null default '',
+  status text not null default 'Draft',
+  page_count integer not null default 0,
+  page_previews jsonb not null default '[]'::jsonb,
+  fields jsonb not null default '[]'::jsonb,
+  field_values jsonb not null default '{}'::jsonb,
+  signing_token_hash text not null default '',
+  signing_created_at timestamptz,
+  signing_expires_at timestamptz,
+  signing_completed_at timestamptz,
+  signing_recipient_email text not null default '',
+  signing_recipient_name text not null default '',
+  audit_events jsonb not null default '[]'::jsonb,
+  document_hash text not null default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists pdf_documents_user_updated_at_idx
+  on public.pdf_documents (user_id, updated_at desc);
+
+create index if not exists pdf_documents_status_idx
+  on public.pdf_documents (status);
+
+create unique index if not exists pdf_documents_signing_token_hash_idx
+  on public.pdf_documents (signing_token_hash)
+  where signing_token_hash <> '';
+
+alter table public.pdf_documents enable row level security;
+
+grant select, insert, update, delete on public.pdf_documents to authenticated;
+grant all on public.pdf_documents to service_role;
+
+drop policy if exists "Users can read own uploaded PDFs" on public.pdf_documents;
+create policy "Users can read own uploaded PDFs"
+  on public.pdf_documents
+  for select
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can insert own uploaded PDFs" on public.pdf_documents;
+create policy "Users can insert own uploaded PDFs"
+  on public.pdf_documents
+  for insert
+  to authenticated
+  with check ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can update own uploaded PDFs" on public.pdf_documents;
+create policy "Users can update own uploaded PDFs"
+  on public.pdf_documents
+  for update
+  to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+drop policy if exists "Users can delete own uploaded PDFs" on public.pdf_documents;
+create policy "Users can delete own uploaded PDFs"
+  on public.pdf_documents
+  for delete
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+drop trigger if exists pdf_documents_set_updated_at on public.pdf_documents;
+create trigger pdf_documents_set_updated_at
+  before update on public.pdf_documents
+  for each row execute function public.set_documents_updated_at();
