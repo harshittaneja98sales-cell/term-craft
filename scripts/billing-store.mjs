@@ -22,6 +22,7 @@ const supabaseKey =
 const supabaseBillingTable =
   process.env.SUPABASE_BILLING_TABLE ?? "billing_profiles";
 let memoryProfiles = [];
+let supabaseBillingFallbackReason = "";
 
 function hasSupabaseConfig() {
   return Boolean(supabaseUrl && supabaseKey);
@@ -29,8 +30,13 @@ function hasSupabaseConfig() {
 
 export function getBillingStorageInfo() {
   return {
-    provider: hasSupabaseConfig() ? "supabase" : "local-json",
-    durable: hasSupabaseConfig(),
+    provider: hasSupabaseConfig()
+      ? supabaseBillingFallbackReason
+        ? "local-json-fallback"
+        : "supabase"
+      : "local-json",
+    durable: hasSupabaseConfig() && !supabaseBillingFallbackReason,
+    reason: supabaseBillingFallbackReason,
   };
 }
 
@@ -100,7 +106,19 @@ async function supabaseRequest(query, options = {}) {
 
   if (!response.ok) {
     const detail = await response.text();
-    throw new Error(`Supabase billing request failed: ${response.status} ${detail}`);
+    const error = new Error(`Supabase billing request failed: ${response.status} ${detail}`);
+
+    if (
+      response.status === 404 &&
+      (detail.includes("PGRST205") ||
+        detail.includes(`'public.${supabaseBillingTable}'`) ||
+        detail.includes(`table '${supabaseBillingTable}'`))
+    ) {
+      error.code = "SUPABASE_BILLING_TABLE_MISSING";
+      supabaseBillingFallbackReason = `${supabaseBillingTable} table missing`;
+    }
+
+    throw error;
   }
 
   if (response.status === 204) {
@@ -108,6 +126,13 @@ async function supabaseRequest(query, options = {}) {
   }
 
   return response.json();
+}
+
+function isBillingTableMissing(error) {
+  return (
+    error?.code === "SUPABASE_BILLING_TABLE_MISSING" ||
+    String(error?.message ?? "").includes("PGRST205")
+  );
 }
 
 function encodeFilter(value) {
@@ -181,10 +206,16 @@ async function writeLocalProfiles(profiles) {
 
 export async function getBillingProfile(userId) {
   if (hasSupabaseConfig()) {
-    const rows = await supabaseRequest(
-      `?select=*&user_id=eq.${encodeFilter(userId)}&limit=1`,
-    );
-    return Array.isArray(rows) && rows[0] ? fromSupabaseProfile(rows[0]) : null;
+    try {
+      const rows = await supabaseRequest(
+        `?select=*&user_id=eq.${encodeFilter(userId)}&limit=1`,
+      );
+      return Array.isArray(rows) && rows[0] ? fromSupabaseProfile(rows[0]) : null;
+    } catch (error) {
+      if (!isBillingTableMissing(error)) {
+        throw error;
+      }
+    }
   }
 
   const profiles = await readLocalProfiles();
@@ -197,10 +228,16 @@ export async function getBillingProfileByCustomerId(stripeCustomerId) {
   }
 
   if (hasSupabaseConfig()) {
-    const rows = await supabaseRequest(
-      `?select=*&stripe_customer_id=eq.${encodeFilter(stripeCustomerId)}&limit=1`,
-    );
-    return Array.isArray(rows) && rows[0] ? fromSupabaseProfile(rows[0]) : null;
+    try {
+      const rows = await supabaseRequest(
+        `?select=*&stripe_customer_id=eq.${encodeFilter(stripeCustomerId)}&limit=1`,
+      );
+      return Array.isArray(rows) && rows[0] ? fromSupabaseProfile(rows[0]) : null;
+    } catch (error) {
+      if (!isBillingTableMissing(error)) {
+        throw error;
+      }
+    }
   }
 
   const profiles = await readLocalProfiles();
@@ -220,15 +257,21 @@ export async function upsertBillingProfile(profile) {
   };
 
   if (hasSupabaseConfig()) {
-    const rows = await supabaseRequest("?select=*", {
-      method: "POST",
-      headers: { Prefer: "resolution=merge-duplicates,return=representation" },
-      body: JSON.stringify(toSupabaseProfile(normalizedProfile)),
-    });
+    try {
+      const rows = await supabaseRequest("?select=*", {
+        method: "POST",
+        headers: { Prefer: "resolution=merge-duplicates,return=representation" },
+        body: JSON.stringify(toSupabaseProfile(normalizedProfile)),
+      });
 
-    return Array.isArray(rows) && rows[0]
-      ? fromSupabaseProfile(rows[0])
-      : normalizedProfile;
+      return Array.isArray(rows) && rows[0]
+        ? fromSupabaseProfile(rows[0])
+        : normalizedProfile;
+    } catch (error) {
+      if (!isBillingTableMissing(error)) {
+        throw error;
+      }
+    }
   }
 
   const timestamp = new Date().toISOString();

@@ -1005,6 +1005,11 @@ async function fetchBillingStatus(session: AuthSession) {
   }>;
 }
 
+function isSessionFailure(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  return /sign in required|invalid session|session expired|jwt|token/i.test(message);
+}
+
 async function createCheckoutSession(session: AuthSession) {
   const response = await fetch("/api/billing/checkout", {
     headers: createAuthHeaders(session),
@@ -4423,18 +4428,25 @@ function DashboardPage() {
       saveStoredAuthSession(nextSession);
       setSession(nextSession);
 
-      const [vaultData, billingData] = await Promise.all([
-        fetchVaultDocuments(nextSession),
-        fetchBillingStatus(nextSession),
-      ]);
+      const vaultData = await fetchVaultDocuments(nextSession);
       setDocuments(vaultData.documents);
       setStorage(vaultData.storage);
-      setBilling(billingData.billing);
-      setBillingConfig(billingData.config);
       setSelectedId((current) => current || vaultData.documents[0]?.id || "");
+
+      try {
+        const billingData = await fetchBillingStatus(nextSession);
+        setBilling(billingData.billing);
+        setBillingConfig(billingData.config);
+      } catch (billingError) {
+        console.error(billingError);
+        setBilling(null);
+        setBillingConfig(null);
+      }
     } catch (requestError) {
-      clearStoredAuthSession();
-      setSession(null);
+      if (isSessionFailure(requestError)) {
+        clearStoredAuthSession();
+        setSession(null);
+      }
       setError(
         requestError instanceof Error
           ? requestError.message
