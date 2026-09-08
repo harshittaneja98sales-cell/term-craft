@@ -271,6 +271,8 @@ type PdfFieldDragState = {
   mode: "move" | "resize";
   pageHeight: number;
   pageWidth: number;
+  pointerOffsetX: number;
+  pointerOffsetY: number;
   startClientX: number;
   startClientY: number;
   startHeight: number;
@@ -6228,6 +6230,26 @@ function PdfFieldEditorPage() {
     }
   }
 
+  function getPdfPageFrameAtPoint(clientX: number, clientY: number) {
+    const elements = window.document.elementsFromPoint(clientX, clientY);
+
+    for (const element of elements) {
+      if (!(element instanceof HTMLElement)) {
+        continue;
+      }
+
+      const pageFrame = element.classList.contains("pdf-page-frame")
+        ? element
+        : element.closest<HTMLElement>(".pdf-page-frame");
+
+      if (pageFrame?.dataset.pdfPageNumber) {
+        return pageFrame;
+      }
+    }
+
+    return null;
+  }
+
   function startFieldPointer(
     event: React.PointerEvent<HTMLElement>,
     field: PdfPlacedField,
@@ -6244,11 +6266,30 @@ function PdfFieldEditorPage() {
     setSelectedFieldId(field.id);
 
     const pageRect = pageElement.getBoundingClientRect();
+    const fieldRect = event.currentTarget.getBoundingClientRect();
+    let currentDragPageNumber = field.pageNumber;
+    let currentDragPageRect = pageRect;
     const dragState: PdfFieldDragState = {
       fieldId: field.id,
       mode,
       pageHeight: pageRect.height,
       pageWidth: pageRect.width,
+      pointerOffsetX:
+        mode === "move" && fieldRect.width > 0
+          ? clampNumber(
+              ((event.clientX - fieldRect.left) / fieldRect.width) * field.width,
+              0,
+              field.width,
+            )
+          : 0,
+      pointerOffsetY:
+        mode === "move" && fieldRect.height > 0
+          ? clampNumber(
+              ((event.clientY - fieldRect.top) / fieldRect.height) * field.height,
+              0,
+              field.height,
+            )
+          : 0,
       startClientX: event.clientX,
       startClientY: event.clientY,
       startHeight: field.height,
@@ -6263,6 +6304,27 @@ function PdfFieldEditorPage() {
         100;
       const deltaY =
         ((pointerEvent.clientY - dragState.startClientY) / dragState.pageHeight) *
+        100;
+      const targetPageFrame =
+        dragState.mode === "move"
+          ? getPdfPageFrameAtPoint(pointerEvent.clientX, pointerEvent.clientY)
+          : null;
+      const framePageNumber = targetPageFrame?.dataset.pdfPageNumber
+        ? Number(targetPageFrame.dataset.pdfPageNumber)
+        : Number.NaN;
+
+      if (targetPageFrame && Number.isFinite(framePageNumber)) {
+        currentDragPageNumber = framePageNumber;
+        currentDragPageRect = targetPageFrame.getBoundingClientRect();
+      }
+
+      const targetPageNumber = currentDragPageNumber;
+      const targetPageRect = currentDragPageRect;
+      const pointerX =
+        ((pointerEvent.clientX - targetPageRect.left) / targetPageRect.width) *
+        100;
+      const pointerY =
+        ((pointerEvent.clientY - targetPageRect.top) / targetPageRect.height) *
         100;
 
       setFields((current) =>
@@ -6288,15 +6350,26 @@ function PdfFieldEditorPage() {
 
           return {
             ...currentField,
-            x: clampNumber(dragState.startX + deltaX, 0, 100 - currentField.width),
+            pageNumber: Number.isFinite(targetPageNumber)
+              ? targetPageNumber
+              : currentField.pageNumber,
+            x: clampNumber(
+              pointerX - dragState.pointerOffsetX,
+              0,
+              100 - currentField.width,
+            ),
             y: clampNumber(
-              dragState.startY + deltaY,
+              pointerY - dragState.pointerOffsetY,
               0,
               100 - currentField.height,
             ),
           };
         }),
       );
+
+      if (dragState.mode === "move" && Number.isFinite(targetPageNumber)) {
+        setActivePageNumber(targetPageNumber);
+      }
     }
 
     function stopMoving() {
@@ -6751,6 +6824,7 @@ function PdfFieldEditorPage() {
                           className={`pdf-page-frame ${
                             activePageNumber === page.pageNumber ? "active" : ""
                           }`}
+                          data-pdf-page-number={page.pageNumber}
                           style={{
                             aspectRatio: `${page.width} / ${page.height}`,
                             width: `${page.width}px`,
