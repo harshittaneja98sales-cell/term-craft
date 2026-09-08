@@ -855,6 +855,46 @@ function formatPdfFieldValue(field: PdfPlacedField, value?: PdfFieldValue) {
   return value.textValue ?? "";
 }
 
+function getPdfFieldActionText(field: PdfPlacedField) {
+  if (field.type === "signature") {
+    return "Sign This Field";
+  }
+
+  if (field.type === "initials") {
+    return "Add Initials";
+  }
+
+  if (field.type === "date") {
+    return "Set Date";
+  }
+
+  if (field.type === "checkbox") {
+    return "Mark Checkbox";
+  }
+
+  return "Fill This Field";
+}
+
+function getPdfFieldPromptText(field: PdfPlacedField) {
+  if (field.type === "signature") {
+    return "Click to sign";
+  }
+
+  if (field.type === "initials") {
+    return "Click to initial";
+  }
+
+  if (field.type === "date") {
+    return "Click to date";
+  }
+
+  if (field.type === "checkbox") {
+    return "Click to check";
+  }
+
+  return "Click to fill";
+}
+
 function readStoredDraft(): StoredDraft | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -5944,7 +5984,11 @@ function PdfFieldEditorPage() {
                                   isPdfFieldCompleted(field, fieldValues[field.id])
                                     ? "filled"
                                     : ""
-                                } ${editorMode === "sign" ? "signing-mode" : ""}
+                                } ${
+                                  editorMode === "sign"
+                                    ? "signing-mode"
+                                    : "prepare-mode"
+                                }
                                 }`}
                                 key={field.id}
                                 role="button"
@@ -5974,6 +6018,7 @@ function PdfFieldEditorPage() {
                               >
                                 <PdfPlacedFieldContent
                                   field={field}
+                                  mode={editorMode}
                                   value={fieldValues[field.id]}
                                 />
                                 {editorMode === "prepare" ? (
@@ -6103,6 +6148,17 @@ function PdfFieldEditorPage() {
                   </label>
                   <div className="pdf-inspector-actions">
                     <button
+                      className="button primary full-width"
+                      type="button"
+                      onClick={() => {
+                        setEditorMode("sign");
+                        activatePdfField(selectedField);
+                      }}
+                    >
+                      <PdfFieldIcon type={selectedField.type} />
+                      <span>{getPdfFieldActionText(selectedField)}</span>
+                    </button>
+                    <button
                       className="button secondary full-width"
                       type="button"
                       onClick={() =>
@@ -6186,9 +6242,11 @@ function PdfFieldEditorPage() {
 
 function PdfPlacedFieldContent({
   field,
+  mode,
   value,
 }: {
   field: PdfPlacedField;
+  mode: PdfEditorMode;
   value?: PdfFieldValue;
 }) {
   if (
@@ -6220,9 +6278,13 @@ function PdfPlacedFieldContent({
     <>
       <span>
         <PdfFieldIcon type={field.type} />
-        {field.label}
+        {mode === "sign"
+          ? getPdfFieldPromptText(field)
+          : `${PDF_FIELD_LABELS[field.type]} field`}
       </span>
-      <small>{field.assignee === "client" ? "Client" : "Sender"}</small>
+      <small>
+        {field.label} | {field.assignee === "client" ? "Client" : "Sender"}
+      </small>
     </>
   );
 }
