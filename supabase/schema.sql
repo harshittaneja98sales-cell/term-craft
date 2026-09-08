@@ -108,12 +108,15 @@ create policy "Users can delete own documents"
   using (auth.uid() = user_id);
 
 create or replace function public.set_documents_updated_at()
-returns trigger as $$
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
 begin
   new.updated_at = now();
   return new;
 end;
-$$ language plpgsql;
+$$;
 
 drop trigger if exists documents_set_updated_at on public.documents;
 create trigger documents_set_updated_at
@@ -158,12 +161,15 @@ create policy "Users can read own billing profile"
   using ((select auth.uid()) = user_id);
 
 create or replace function public.set_billing_profiles_updated_at()
-returns trigger as $$
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
 begin
   new.updated_at = now();
   return new;
 end;
-$$ language plpgsql;
+$$;
 
 drop trigger if exists billing_profiles_set_updated_at on public.billing_profiles;
 create trigger billing_profiles_set_updated_at
