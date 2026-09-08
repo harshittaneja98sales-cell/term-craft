@@ -5334,6 +5334,12 @@ function PdfFieldEditorPage() {
     };
   }, [pdfDocument]);
 
+  useEffect(() => {
+    if (editorMode === "sign" && fields.length === 0) {
+      setEditorMode("prepare");
+    }
+  }, [editorMode, fields.length]);
+
   async function uploadPdf(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     event.target.value = "";
@@ -5841,7 +5847,7 @@ function PdfFieldEditorPage() {
                 </button>
                 <button
                   className={editorMode === "sign" ? "active" : ""}
-                  disabled={pages.length === 0}
+                  disabled={pages.length === 0 || fields.length === 0}
                   type="button"
                   onClick={() => setEditorMode("sign")}
                 >
