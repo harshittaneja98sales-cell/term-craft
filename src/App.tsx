@@ -28,6 +28,7 @@ import {
   Wand2,
   X,
 } from "lucide-react";
+import type { PDFDocumentProxy } from "pdfjs-dist";
 import { useEffect, useMemo, useRef, useState } from "react";
 import additionalTemplatesRaw from "./additional-templates.json";
 
@@ -227,6 +228,41 @@ type VaultDocument = {
   templateValues: Record<string, string>;
   createdAt: string;
   updatedAt: string;
+};
+
+type PdfFieldType = "signature" | "initials" | "text" | "date" | "checkbox";
+type PdfFieldAssignee = "sender" | "client";
+
+type PdfPagePreview = {
+  pageNumber: number;
+  width: number;
+  height: number;
+};
+
+type PdfPlacedField = {
+  id: string;
+  assignee: PdfFieldAssignee;
+  height: number;
+  label: string;
+  pageNumber: number;
+  required: boolean;
+  type: PdfFieldType;
+  width: number;
+  x: number;
+  y: number;
+};
+
+type PdfFieldDragState = {
+  fieldId: string;
+  mode: "move" | "resize";
+  pageHeight: number;
+  pageWidth: number;
+  startClientX: number;
+  startClientY: number;
+  startHeight: number;
+  startWidth: number;
+  startX: number;
+  startY: number;
 };
 
 type SaveVaultDocumentPayload = {
@@ -674,6 +710,99 @@ function createId() {
   }
 
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+const PDF_RENDER_SCALE = 1.35;
+const PDF_FIELD_TYPES: PdfFieldType[] = [
+  "signature",
+  "initials",
+  "text",
+  "date",
+  "checkbox",
+];
+const PDF_FIELD_LABELS: Record<PdfFieldType, string> = {
+  checkbox: "Checkbox",
+  date: "Date",
+  initials: "Initials",
+  signature: "Signature",
+  text: "Text",
+};
+const PDF_FIELD_DEFAULT_SIZES: Record<
+  PdfFieldType,
+  { height: number; width: number }
+> = {
+  checkbox: { height: 4.5, width: 4.5 },
+  date: { height: 5, width: 19 },
+  initials: { height: 5.5, width: 13 },
+  signature: { height: 7, width: 26 },
+  text: { height: 5, width: 24 },
+};
+type PdfJsModule = typeof import("pdfjs-dist");
+let pdfJsModulePromise: Promise<PdfJsModule> | null = null;
+
+function loadPdfJsModule() {
+  if (!pdfJsModulePromise) {
+    pdfJsModulePromise = Promise.all([
+      import("pdfjs-dist"),
+      import("pdfjs-dist/build/pdf.worker.mjs?url"),
+    ]).then(([pdfjsLib, worker]) => {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = worker.default;
+      return pdfjsLib;
+    });
+  }
+
+  return pdfJsModulePromise;
+}
+
+function getPdfFieldLabel(type: PdfFieldType, count: number) {
+  return `${PDF_FIELD_LABELS[type]} ${count}`;
+}
+
+function createPdfField(
+  type: PdfFieldType,
+  pageNumber: number,
+  x: number,
+  y: number,
+  count: number,
+): PdfPlacedField {
+  const defaultSize = PDF_FIELD_DEFAULT_SIZES[type];
+
+  return {
+    assignee: type === "signature" || type === "initials" ? "client" : "sender",
+    height: defaultSize.height,
+    id: createId(),
+    label: getPdfFieldLabel(type, count),
+    pageNumber,
+    required: type !== "text",
+    type,
+    width: defaultSize.width,
+    x,
+    y,
+  };
+}
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function PdfFieldIcon({ type }: { type: PdfFieldType }) {
+  if (type === "signature") {
+    return <PenLine size={16} />;
+  }
+
+  if (type === "initials") {
+    return <UserCheck size={16} />;
+  }
+
+  if (type === "date") {
+    return <Clock3 size={16} />;
+  }
+
+  if (type === "checkbox") {
+    return <CheckCircle2 size={16} />;
+  }
+
+  return <FileText size={16} />;
 }
 
 function readStoredDraft(): StoredDraft | null {
@@ -3520,6 +3649,7 @@ function PublicHeader() {
         <a className={currentPath === "/" ? "active" : ""} href="/">Home</a>
         <a className={currentPath.startsWith("/templates") ? "active" : ""} href="/templates">Template Hub</a>
         <a className={currentPath === "/builder" ? "active" : ""} href="/builder">Contract Studio</a>
+        <a className={currentPath === "/editor" ? "active" : ""} href="/editor">PDF Editor</a>
         <a className={currentPath === "/dashboard" ? "active" : ""} href="/dashboard">Vault</a>
         <a className={currentPath === "/billing" ? "active" : ""} href="/billing">Billing</a>
         <a className={currentPath === "/privacy" ? "active" : ""} href="/privacy">Privacy</a>
@@ -3560,6 +3690,7 @@ function PublicFooter() {
           <strong>Term Craft</strong>
           <a href="/templates">Template directory</a>
           <a href="/builder">Contract Studio</a>
+          <a href="/editor">PDF Field Editor</a>
           <a href="/dashboard">Document Vault</a>
           <a href="/billing">Billing</a>
           <a href="/privacy">Privacy Policy</a>
@@ -4632,6 +4763,10 @@ function DashboardPage() {
               <FileText size={17} />
               <span>Templates</span>
             </a>
+            <a className="button secondary" href="/editor">
+              <PenLine size={17} />
+              <span>Upload PDF</span>
+            </a>
             <a className="button secondary" href="/billing">
               <BadgeDollarSign size={17} />
               <span>Billing</span>
@@ -4997,6 +5132,659 @@ function CreateDocumentModal({
           </div>
         </form>
       </section>
+    </div>
+  );
+}
+
+function PdfFieldEditorPage() {
+  const [activeFieldType, setActiveFieldType] =
+    useState<PdfFieldType>("signature");
+  const [fields, setFields] = useState<PdfPlacedField[]>([]);
+  const [isRendering, setIsRendering] = useState(false);
+  const [pages, setPages] = useState<PdfPagePreview[]>([]);
+  const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
+  const [pdfName, setPdfName] = useState("");
+  const [renderError, setRenderError] = useState("");
+  const [selectedFieldId, setSelectedFieldId] = useState("");
+  const canvasRefs = useRef<Record<number, HTMLCanvasElement | null>>({});
+
+  const selectedField = useMemo(
+    () => fields.find((field) => field.id === selectedFieldId) ?? null,
+    [fields, selectedFieldId],
+  );
+  const firstPageNumber = pages[0]?.pageNumber ?? 1;
+
+  usePageMetadata({
+    canonicalPath: "/editor",
+    title: "PDF Field Editor | Term Craft",
+    description:
+      "Upload a PDF and place signature, initials, date, text, and checkbox fields on the document.",
+  });
+
+  useEffect(() => {
+    const activeDocument = pdfDocument;
+
+    if (!activeDocument || pages.length === 0) {
+      return;
+    }
+
+    const documentToRender: PDFDocumentProxy = activeDocument;
+    let isCancelled = false;
+
+    async function renderPages() {
+      setIsRendering(true);
+
+      try {
+        for (const pagePreview of pages) {
+          if (isCancelled) {
+            return;
+          }
+
+          const canvas = canvasRefs.current[pagePreview.pageNumber];
+          if (!canvas) {
+            continue;
+          }
+
+          const page = await documentToRender.getPage(pagePreview.pageNumber);
+          const viewport = page.getViewport({ scale: PDF_RENDER_SCALE });
+          const context = canvas.getContext("2d");
+          if (!context) {
+            continue;
+          }
+
+          canvas.width = Math.floor(viewport.width);
+          canvas.height = Math.floor(viewport.height);
+          context.clearRect(0, 0, canvas.width, canvas.height);
+          await page.render({ canvas, canvasContext: context, viewport }).promise;
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          setRenderError(
+            error instanceof Error ? error.message : "Could not render this PDF.",
+          );
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsRendering(false);
+        }
+      }
+    }
+
+    void renderPages();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [pages, pdfDocument]);
+
+  useEffect(() => {
+    return () => {
+      if (pdfDocument) {
+        void pdfDocument.cleanup();
+      }
+    };
+  }, [pdfDocument]);
+
+  async function uploadPdf(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      setRenderError("Upload a PDF file.");
+      return;
+    }
+
+    if (file.size > 30 * 1024 * 1024) {
+      setRenderError("Upload a PDF under 30 MB for this editor.");
+      return;
+    }
+
+    setIsRendering(true);
+    setRenderError("");
+    setFields([]);
+    setSelectedFieldId("");
+
+    try {
+      const pdfjsLib = await loadPdfJsModule();
+      const fileData = await file.arrayBuffer();
+      const loadingTask = pdfjsLib.getDocument({
+        data: new Uint8Array(fileData),
+      });
+      const loadedDocument = await loadingTask.promise;
+      const nextPages: PdfPagePreview[] = [];
+
+      for (let pageNumber = 1; pageNumber <= loadedDocument.numPages; pageNumber += 1) {
+        const page = await loadedDocument.getPage(pageNumber);
+        const viewport = page.getViewport({ scale: PDF_RENDER_SCALE });
+        nextPages.push({
+          height: viewport.height,
+          pageNumber,
+          width: viewport.width,
+        });
+      }
+
+      if (pdfDocument) {
+        void pdfDocument.cleanup();
+      }
+
+      canvasRefs.current = {};
+      setPdfDocument(loadedDocument);
+      setPdfName(file.name);
+      setPages(nextPages);
+    } catch (error) {
+      setPages([]);
+      setPdfDocument(null);
+      setPdfName("");
+      setRenderError(
+        error instanceof Error ? error.message : "Could not load this PDF.",
+      );
+    } finally {
+      setIsRendering(false);
+    }
+  }
+
+  function addFieldToPage(type: PdfFieldType, pageNumber = firstPageNumber) {
+    const fieldCount = fields.length + 1;
+    const field = createPdfField(type, pageNumber, 36, 42, fieldCount);
+    setFields((current) => [...current, field]);
+    setSelectedFieldId(field.id);
+  }
+
+  function addFieldFromDrop(
+    event: React.DragEvent<HTMLDivElement>,
+    page: PdfPagePreview,
+  ) {
+    event.preventDefault();
+    const droppedType = event.dataTransfer.getData("application/x-termcraft-field");
+    const type = PDF_FIELD_TYPES.includes(droppedType as PdfFieldType)
+      ? (droppedType as PdfFieldType)
+      : activeFieldType;
+    const defaultSize = PDF_FIELD_DEFAULT_SIZES[type];
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = clampNumber(
+      ((event.clientX - rect.left) / rect.width) * 100 - defaultSize.width / 2,
+      0,
+      100 - defaultSize.width,
+    );
+    const y = clampNumber(
+      ((event.clientY - rect.top) / rect.height) * 100 - defaultSize.height / 2,
+      0,
+      100 - defaultSize.height,
+    );
+    const field = createPdfField(type, page.pageNumber, x, y, fields.length + 1);
+    setFields((current) => [...current, field]);
+    setSelectedFieldId(field.id);
+  }
+
+  function updateField(
+    fieldId: string,
+    patch: Partial<Omit<PdfPlacedField, "id">>,
+  ) {
+    setFields((current) =>
+      current.map((field) =>
+        field.id === fieldId ? { ...field, ...patch } : field,
+      ),
+    );
+  }
+
+  function deleteField(fieldId: string) {
+    setFields((current) => current.filter((field) => field.id !== fieldId));
+    setSelectedFieldId((current) => (current === fieldId ? "" : current));
+  }
+
+  function clearFields() {
+    if (fields.length === 0 || window.confirm("Remove all placed fields?")) {
+      setFields([]);
+      setSelectedFieldId("");
+    }
+  }
+
+  function startFieldPointer(
+    event: React.PointerEvent<HTMLElement>,
+    field: PdfPlacedField,
+    mode: PdfFieldDragState["mode"],
+  ) {
+    const pageElement = event.currentTarget.closest(".pdf-page-frame");
+    if (!(pageElement instanceof HTMLElement)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    setSelectedFieldId(field.id);
+
+    const pageRect = pageElement.getBoundingClientRect();
+    const dragState: PdfFieldDragState = {
+      fieldId: field.id,
+      mode,
+      pageHeight: pageRect.height,
+      pageWidth: pageRect.width,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startHeight: field.height,
+      startWidth: field.width,
+      startX: field.x,
+      startY: field.y,
+    };
+
+    function moveField(pointerEvent: PointerEvent) {
+      const deltaX =
+        ((pointerEvent.clientX - dragState.startClientX) / dragState.pageWidth) *
+        100;
+      const deltaY =
+        ((pointerEvent.clientY - dragState.startClientY) / dragState.pageHeight) *
+        100;
+
+      setFields((current) =>
+        current.map((currentField) => {
+          if (currentField.id !== dragState.fieldId) {
+            return currentField;
+          }
+
+          if (dragState.mode === "resize") {
+            const width = clampNumber(
+              dragState.startWidth + deltaX,
+              4,
+              100 - currentField.x,
+            );
+            const height = clampNumber(
+              dragState.startHeight + deltaY,
+              3.5,
+              100 - currentField.y,
+            );
+
+            return { ...currentField, height, width };
+          }
+
+          return {
+            ...currentField,
+            x: clampNumber(dragState.startX + deltaX, 0, 100 - currentField.width),
+            y: clampNumber(
+              dragState.startY + deltaY,
+              0,
+              100 - currentField.height,
+            ),
+          };
+        }),
+      );
+    }
+
+    function stopMoving() {
+      window.removeEventListener("pointermove", moveField);
+    }
+
+    window.addEventListener("pointermove", moveField);
+    window.addEventListener("pointerup", stopMoving, { once: true });
+    window.addEventListener("pointercancel", stopMoving, { once: true });
+  }
+
+  function exportFieldMap() {
+    const fieldMap = {
+      createdAt: new Date().toISOString(),
+      fields,
+      pageCount: pages.length,
+      pdfFileName: pdfName,
+      version: 1,
+    };
+
+    downloadBlob(
+      `${createFileSlug(pdfName || "uploaded-document")}-field-map.json`,
+      "application/json;charset=utf-8",
+      JSON.stringify(fieldMap, null, 2),
+    );
+  }
+
+  return (
+    <div className="public-page">
+      <PublicHeader />
+      <main className="pdf-editor-page">
+        <section className="pdf-editor-header">
+          <div>
+            <div className="template-kicker">PDF Field Editor</div>
+            <h1>Prepare uploaded PDFs for signing</h1>
+            <p>
+              Upload a contract PDF, place fields on the live document preview,
+              and prepare the field map for the signing workflow.
+            </p>
+          </div>
+          <div className="admin-actions">
+            <label className="button primary pdf-upload-button">
+              <FilePlus2 size={17} />
+              <span>Upload PDF</span>
+              <input accept="application/pdf" type="file" onChange={uploadPdf} />
+            </label>
+            <button
+              className="button secondary"
+              disabled={fields.length === 0}
+              type="button"
+              onClick={exportFieldMap}
+            >
+              <Download size={17} />
+              <span>Export Map</span>
+            </button>
+            <button
+              className="button ghost"
+              disabled={fields.length === 0}
+              type="button"
+              onClick={clearFields}
+            >
+              <RotateCcw size={17} />
+              <span>Clear</span>
+            </button>
+          </div>
+        </section>
+
+        {renderError ? <div className="admin-alert">{renderError}</div> : null}
+
+        <section className="pdf-editor-layout">
+          <aside className="pdf-editor-sidebar">
+            <section className="panel">
+              <PanelTitle icon={<FileText size={18} />} title="Document" />
+              <div className="pdf-editor-filebox">
+                <strong>{pdfName || "No PDF uploaded"}</strong>
+                <span>
+                  {pages.length
+                    ? `${pages.length} page${pages.length === 1 ? "" : "s"} loaded`
+                    : "Upload a PDF to start placing fields."}
+                </span>
+              </div>
+            </section>
+
+            <section className="panel">
+              <PanelTitle icon={<PenLine size={18} />} title="Field Palette" />
+              <div className="pdf-field-palette">
+                {PDF_FIELD_TYPES.map((type) => (
+                  <button
+                    aria-pressed={activeFieldType === type}
+                    className={`pdf-tool-option ${
+                      activeFieldType === type ? "active" : ""
+                    }`}
+                    draggable={pages.length > 0}
+                    key={type}
+                    type="button"
+                    onClick={() => setActiveFieldType(type)}
+                    onDragStart={(event) => {
+                      event.dataTransfer.setData(
+                        "application/x-termcraft-field",
+                        type,
+                      );
+                      event.dataTransfer.effectAllowed = "copy";
+                    }}
+                  >
+                    <PdfFieldIcon type={type} />
+                    <span>{PDF_FIELD_LABELS[type]}</span>
+                  </button>
+                ))}
+              </div>
+              <button
+                className="button secondary full-width"
+                disabled={pages.length === 0}
+                type="button"
+                onClick={() => addFieldToPage(activeFieldType)}
+              >
+                <FilePlus2 size={17} />
+                <span>Add to Page 1</span>
+              </button>
+            </section>
+
+            <section className="panel">
+              <PanelTitle icon={<Users size={18} />} title="Recipients" />
+              <div className="pdf-recipient-list">
+                <span>Sender fields: {fields.filter((field) => field.assignee === "sender").length}</span>
+                <span>Client fields: {fields.filter((field) => field.assignee === "client").length}</span>
+              </div>
+            </section>
+          </aside>
+
+          <section className="pdf-editor-canvas-panel">
+            {pages.length === 0 ? (
+              <div className="pdf-editor-empty">
+                <FilePlus2 size={34} />
+                <h2>Upload a PDF to begin</h2>
+                <p>
+                  After upload, drag fields from the left palette onto the page.
+                </p>
+                <label className="button primary pdf-upload-button">
+                  <FilePlus2 size={17} />
+                  <span>Select PDF</span>
+                  <input accept="application/pdf" type="file" onChange={uploadPdf} />
+                </label>
+              </div>
+            ) : (
+              <>
+                {isRendering ? (
+                  <div className="pdf-render-status">Rendering PDF...</div>
+                ) : null}
+                <div className="pdf-page-stack">
+                  {pages.map((page) => {
+                    const pageFields = fields.filter(
+                      (field) => field.pageNumber === page.pageNumber,
+                    );
+
+                    return (
+                      <section className="pdf-page-block" key={page.pageNumber}>
+                        <div className="pdf-page-heading">
+                          <span>Page {page.pageNumber}</span>
+                          <small>
+                            {pageFields.length} field
+                            {pageFields.length === 1 ? "" : "s"}
+                          </small>
+                        </div>
+                        <div
+                          className="pdf-page-frame"
+                          style={{
+                            aspectRatio: `${page.width} / ${page.height}`,
+                            width: `${page.width}px`,
+                          }}
+                          onClick={() => setSelectedFieldId("")}
+                          onDragOver={(event) => event.preventDefault()}
+                          onDrop={(event) => addFieldFromDrop(event, page)}
+                        >
+                          <canvas
+                            aria-label={`PDF page ${page.pageNumber}`}
+                            className="pdf-page-canvas"
+                            ref={(node) => {
+                              canvasRefs.current[page.pageNumber] = node;
+                            }}
+                          />
+                          <div className="pdf-field-layer">
+                            {pageFields.map((field) => (
+                              <div
+                                className={`pdf-placed-field ${field.type} ${
+                                  selectedFieldId === field.id ? "active" : ""
+                                }`}
+                                key={field.id}
+                                role="button"
+                                style={{
+                                  height: `${field.height}%`,
+                                  left: `${field.x}%`,
+                                  top: `${field.y}%`,
+                                  width: `${field.width}%`,
+                                }}
+                                tabIndex={0}
+                                title={`${field.label} - ${PDF_FIELD_LABELS[field.type]}`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setSelectedFieldId(field.id);
+                                }}
+                                onPointerDown={(event) =>
+                                  startFieldPointer(event, field, "move")
+                                }
+                              >
+                                <span>
+                                  <PdfFieldIcon type={field.type} />
+                                  {field.label}
+                                </span>
+                                <small>
+                                  {field.assignee === "client" ? "Client" : "Sender"}
+                                </small>
+                                <button
+                                  className="pdf-field-remove"
+                                  type="button"
+                                  title="Remove field"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    deleteField(field.id);
+                                  }}
+                                  onPointerDown={(event) => event.stopPropagation()}
+                                >
+                                  <X size={12} />
+                                </button>
+                                <span
+                                  className="pdf-field-resize"
+                                  onPointerDown={(event) =>
+                                    startFieldPointer(event, field, "resize")
+                                  }
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </section>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </section>
+
+          <aside className="pdf-editor-inspector">
+            <section className="panel">
+              <PanelTitle icon={<Target size={18} />} title="Field Details" />
+              {selectedField ? (
+                <div className="pdf-inspector-form">
+                  <Field label="Label">
+                    <input
+                      value={selectedField.label}
+                      onChange={(event) =>
+                        updateField(selectedField.id, { label: event.target.value })
+                      }
+                    />
+                  </Field>
+                  <Field label="Field type">
+                    <select
+                      value={selectedField.type}
+                      onChange={(event) => {
+                        const nextType = event.target.value as PdfFieldType;
+                        updateField(selectedField.id, {
+                          height: PDF_FIELD_DEFAULT_SIZES[nextType].height,
+                          type: nextType,
+                          width: PDF_FIELD_DEFAULT_SIZES[nextType].width,
+                        });
+                      }}
+                    >
+                      {PDF_FIELD_TYPES.map((type) => (
+                        <option key={type} value={type}>
+                          {PDF_FIELD_LABELS[type]}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Assigned to">
+                    <select
+                      value={selectedField.assignee}
+                      onChange={(event) =>
+                        updateField(selectedField.id, {
+                          assignee: event.target.value as PdfFieldAssignee,
+                        })
+                      }
+                    >
+                      <option value="sender">Sender</option>
+                      <option value="client">Client</option>
+                    </select>
+                  </Field>
+                  <Field label="Page">
+                    <select
+                      value={selectedField.pageNumber}
+                      onChange={(event) =>
+                        updateField(selectedField.id, {
+                          pageNumber: Number(event.target.value),
+                          x: 36,
+                          y: 42,
+                        })
+                      }
+                    >
+                      {pages.map((page) => (
+                        <option key={page.pageNumber} value={page.pageNumber}>
+                          Page {page.pageNumber}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <label className="pdf-required-toggle">
+                    <input
+                      checked={selectedField.required}
+                      type="checkbox"
+                      onChange={(event) =>
+                        updateField(selectedField.id, {
+                          required: event.target.checked,
+                        })
+                      }
+                    />
+                    <span>Required field</span>
+                  </label>
+                  <div className="pdf-inspector-actions">
+                    <button
+                      className="button secondary full-width"
+                      type="button"
+                      onClick={() =>
+                        addFieldToPage(selectedField.type, selectedField.pageNumber)
+                      }
+                    >
+                      <FilePlus2 size={17} />
+                      <span>Duplicate Type</span>
+                    </button>
+                    <button
+                      className="button ghost full-width"
+                      type="button"
+                      onClick={() => deleteField(selectedField.id)}
+                    >
+                      <Trash2 size={17} />
+                      <span>Delete Field</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="empty-state">
+                  Select a placed field to edit its label, assignee, page, and
+                  requirement status.
+                </div>
+              )}
+            </section>
+
+            <section className="panel">
+              <PanelTitle icon={<Database size={18} />} title="Field List" />
+              {fields.length === 0 ? (
+                <div className="empty-state">No fields placed yet.</div>
+              ) : (
+                <div className="pdf-field-list">
+                  {fields.map((field) => (
+                    <button
+                      className={`pdf-field-list-row ${
+                        selectedFieldId === field.id ? "active" : ""
+                      }`}
+                      key={field.id}
+                      type="button"
+                      onClick={() => setSelectedFieldId(field.id)}
+                    >
+                      <strong>{field.label}</strong>
+                      <span>
+                        Page {field.pageNumber} | {PDF_FIELD_LABELS[field.type]} |{" "}
+                        {field.assignee === "client" ? "Client" : "Sender"}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          </aside>
+        </section>
+      </main>
+      <PublicFooter />
     </div>
   );
 }
@@ -7646,6 +8434,10 @@ function App() {
 
   if (pathname === "/builder") {
     return <ContractBuilderApp />;
+  }
+
+  if (pathname === "/editor") {
+    return <PdfFieldEditorPage />;
   }
 
   if (pathname === "/sign" || pathname.startsWith("/sign/")) {
