@@ -5137,6 +5137,7 @@ function CreateDocumentModal({
 }
 
 function PdfFieldEditorPage() {
+  const [activePageNumber, setActivePageNumber] = useState(1);
   const [activeFieldType, setActiveFieldType] =
     useState<PdfFieldType>("signature");
   const [fields, setFields] = useState<PdfPlacedField[]>([]);
@@ -5246,6 +5247,7 @@ function PdfFieldEditorPage() {
     setIsRendering(true);
     setRenderError("");
     setFields([]);
+    setActivePageNumber(1);
     setSelectedFieldId("");
 
     try {
@@ -5275,10 +5277,12 @@ function PdfFieldEditorPage() {
       setPdfDocument(loadedDocument);
       setPdfName(file.name);
       setPages(nextPages);
+      setActivePageNumber(nextPages[0]?.pageNumber ?? 1);
     } catch (error) {
       setPages([]);
       setPdfDocument(null);
       setPdfName("");
+      setActivePageNumber(1);
       setRenderError(
         error instanceof Error ? error.message : "Could not load this PDF.",
       );
@@ -5287,10 +5291,15 @@ function PdfFieldEditorPage() {
     }
   }
 
-  function addFieldToPage(type: PdfFieldType, pageNumber = firstPageNumber) {
+  function addFieldToPage(type: PdfFieldType, pageNumber = activePageNumber) {
+    const targetPageNumber = pages.some((page) => page.pageNumber === pageNumber)
+      ? pageNumber
+      : firstPageNumber;
     const fieldCount = fields.length + 1;
-    const field = createPdfField(type, pageNumber, 36, 42, fieldCount);
+    const field = createPdfField(type, targetPageNumber, 36, 42, fieldCount);
     setFields((current) => [...current, field]);
+    setActiveFieldType(type);
+    setActivePageNumber(targetPageNumber);
     setSelectedFieldId(field.id);
   }
 
@@ -5317,6 +5326,8 @@ function PdfFieldEditorPage() {
     );
     const field = createPdfField(type, page.pageNumber, x, y, fields.length + 1);
     setFields((current) => [...current, field]);
+    setActiveFieldType(type);
+    setActivePageNumber(page.pageNumber);
     setSelectedFieldId(field.id);
   }
 
@@ -5355,6 +5366,7 @@ function PdfFieldEditorPage() {
 
     event.preventDefault();
     event.stopPropagation();
+    setActivePageNumber(field.pageNumber);
     setSelectedFieldId(field.id);
 
     const pageRect = pageElement.getBoundingClientRect();
@@ -5506,7 +5518,12 @@ function PdfFieldEditorPage() {
                     draggable={pages.length > 0}
                     key={type}
                     type="button"
-                    onClick={() => setActiveFieldType(type)}
+                    onClick={() => {
+                      setActiveFieldType(type);
+                      if (pages.length > 0) {
+                        addFieldToPage(type);
+                      }
+                    }}
                     onDragStart={(event) => {
                       event.dataTransfer.setData(
                         "application/x-termcraft-field",
@@ -5527,7 +5544,7 @@ function PdfFieldEditorPage() {
                 onClick={() => addFieldToPage(activeFieldType)}
               >
                 <FilePlus2 size={17} />
-                <span>Add to Page 1</span>
+                <span>Add to Page {activePageNumber}</span>
               </button>
             </section>
 
@@ -5567,7 +5584,11 @@ function PdfFieldEditorPage() {
 
                     return (
                       <section className="pdf-page-block" key={page.pageNumber}>
-                        <div className="pdf-page-heading">
+                        <div
+                          className={`pdf-page-heading ${
+                            activePageNumber === page.pageNumber ? "active" : ""
+                          }`}
+                        >
                           <span>Page {page.pageNumber}</span>
                           <small>
                             {pageFields.length} field
@@ -5575,12 +5596,17 @@ function PdfFieldEditorPage() {
                           </small>
                         </div>
                         <div
-                          className="pdf-page-frame"
+                          className={`pdf-page-frame ${
+                            activePageNumber === page.pageNumber ? "active" : ""
+                          }`}
                           style={{
                             aspectRatio: `${page.width} / ${page.height}`,
                             width: `${page.width}px`,
                           }}
-                          onClick={() => setSelectedFieldId("")}
+                          onClick={() => {
+                            setActivePageNumber(page.pageNumber);
+                            setSelectedFieldId("");
+                          }}
                           onDragOver={(event) => event.preventDefault()}
                           onDrop={(event) => addFieldFromDrop(event, page)}
                         >
@@ -5609,6 +5635,7 @@ function PdfFieldEditorPage() {
                                 title={`${field.label} - ${PDF_FIELD_LABELS[field.type]}`}
                                 onClick={(event) => {
                                   event.stopPropagation();
+                                  setActivePageNumber(field.pageNumber);
                                   setSelectedFieldId(field.id);
                                 }}
                                 onPointerDown={(event) =>
@@ -5700,13 +5727,15 @@ function PdfFieldEditorPage() {
                   <Field label="Page">
                     <select
                       value={selectedField.pageNumber}
-                      onChange={(event) =>
+                      onChange={(event) => {
+                        const nextPageNumber = Number(event.target.value);
+                        setActivePageNumber(nextPageNumber);
                         updateField(selectedField.id, {
-                          pageNumber: Number(event.target.value),
+                          pageNumber: nextPageNumber,
                           x: 36,
                           y: 42,
-                        })
-                      }
+                        });
+                      }}
                     >
                       {pages.map((page) => (
                         <option key={page.pageNumber} value={page.pageNumber}>
@@ -5769,7 +5798,10 @@ function PdfFieldEditorPage() {
                       }`}
                       key={field.id}
                       type="button"
-                      onClick={() => setSelectedFieldId(field.id)}
+                      onClick={() => {
+                        setActivePageNumber(field.pageNumber);
+                        setSelectedFieldId(field.id);
+                      }}
                     >
                       <strong>{field.label}</strong>
                       <span>

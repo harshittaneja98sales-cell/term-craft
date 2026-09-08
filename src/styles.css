@@ -2511,6 +2511,10 @@ button:focus-visible {
   font-weight: 700;
 }
 
+.pdf-page-heading.active span {
+  color: var(--teal-dark);
+}
+
 .pdf-page-frame {
   position: relative;
   max-width: min(100%, 920px);
@@ -2519,6 +2523,11 @@ button:focus-visible {
   background: #ffffff;
   box-shadow: var(--shadow-paper);
   overflow: hidden;
+}
+
+.pdf-page-frame.active {
+  border-color: var(--teal);
+  box-shadow: var(--shadow-paper), 0 0 0 3px rgba(13, 148, 136, 0.14);
 }
 
 .pdf-page-canvas,
