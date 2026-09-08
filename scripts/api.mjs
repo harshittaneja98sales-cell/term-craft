@@ -24,6 +24,10 @@ import {
   updatePdfDocument,
 } from "./pdf-document-store.mjs";
 import {
+  buildFinalSignedPdfPackage,
+  buildPdfAuditCertificate,
+} from "./pdf-final-package.mjs";
+import {
   createBillingPortalSession,
   createSubscriptionCheckoutSession,
   getBillingStatus,
@@ -244,6 +248,27 @@ function isPdfFieldCompleted(field, value) {
   return Boolean(cleanString(value.textValue, 2000));
 }
 
+function isPdfDocumentReadyForPackage(document) {
+  if (document?.status === "Signed" || document?.signingCompletedAt) {
+    return true;
+  }
+
+  const fields = Array.isArray(document?.fields) ? document.fields : [];
+  const values =
+    document?.fieldValues && typeof document.fieldValues === "object"
+      ? document.fieldValues
+      : {};
+
+  if (fields.length === 0) {
+    return false;
+  }
+
+  const requiredFields = fields.filter((field) => Boolean(field?.required));
+  const fieldsToCheck = requiredFields.length > 0 ? requiredFields : fields;
+
+  return fieldsToCheck.every((field) => isPdfFieldCompleted(field, values[field.id]));
+}
+
 function createUploadedPdfHash(document) {
   return createHash("sha256")
     .update(
@@ -255,6 +280,16 @@ function createUploadedPdfHash(document) {
       }),
     )
     .digest("hex");
+}
+
+function getDownloadFileName(fileName, suffix) {
+  const base = cleanString(fileName, 160)
+    .replace(/\.pdf$/i, "")
+    .replace(/[^\w.\-() ]+/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return `${base || "document"}-${suffix}.pdf`;
 }
 
 function sanitizePdfDocument(document) {
@@ -1255,6 +1290,116 @@ export function registerApiRoutes(app) {
         `inline; filename="${document.fileName || "uploaded.pdf"}"`,
       );
       res.send(pdfBuffer);
+    } catch (error) {
+      sendApiError(res, error);
+    }
+  });
+
+  app.get("/api/pdf-documents/:id/final-package", async (req, res) => {
+    try {
+      const user = await authenticateRequest(req);
+      const document = await getPdfDocument(user.id, cleanString(req.params.id, 80));
+
+      if (!document) {
+        res.status(404).json({ error: "Uploaded PDF not found." });
+        return;
+      }
+
+      if (!isPdfDocumentReadyForPackage(document)) {
+        res.status(409).json({
+          error: "Complete all required PDF fields before downloading the signed package.",
+        });
+        return;
+      }
+
+      const pdfBuffer = await readPdfDocumentFile(document);
+      const generatedAt = new Date().toISOString();
+      const result = await buildFinalSignedPdfPackage({
+        document,
+        generatedAt,
+        pdfBuffer,
+      });
+
+      await saveAnalyticsEvent({
+        id: randomUUID(),
+        eventName: "uploaded_pdf_final_package_downloaded",
+        path: "/dashboard",
+        templateTitle: "Uploaded PDF",
+        templatePath: "/editor",
+        referrer: cleanString(req.get("referer"), 500),
+        utmSource: "",
+        utmMedium: "",
+        utmCampaign: "",
+        utmTerm: "",
+        utmContent: "",
+        metadata: {
+          documentId: document.id,
+          packageHash: result.packageHash,
+          userId: user.id,
+        },
+        userAgent: cleanString(req.get("user-agent"), 500),
+        occurredAt: generatedAt,
+      });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${getDownloadFileName(document.fileName, "signed-package")}"`,
+      );
+      res.setHeader("X-TermCraft-Package-Hash", result.packageHash);
+      if (document.documentHash) {
+        res.setHeader("X-TermCraft-Document-Hash", document.documentHash);
+      }
+      res.send(result.buffer);
+    } catch (error) {
+      sendApiError(res, error);
+    }
+  });
+
+  app.get("/api/pdf-documents/:id/audit-certificate", async (req, res) => {
+    try {
+      const user = await authenticateRequest(req);
+      const document = await getPdfDocument(user.id, cleanString(req.params.id, 80));
+
+      if (!document) {
+        res.status(404).json({ error: "Uploaded PDF not found." });
+        return;
+      }
+
+      const generatedAt = new Date().toISOString();
+      const result = await buildPdfAuditCertificate({ document, generatedAt });
+
+      await saveAnalyticsEvent({
+        id: randomUUID(),
+        eventName: "uploaded_pdf_audit_certificate_downloaded",
+        path: "/dashboard",
+        templateTitle: "Uploaded PDF",
+        templatePath: "/editor",
+        referrer: cleanString(req.get("referer"), 500),
+        utmSource: "",
+        utmMedium: "",
+        utmCampaign: "",
+        utmTerm: "",
+        utmContent: "",
+        metadata: {
+          documentId: document.id,
+          packageHash: result.packageHash,
+          userId: user.id,
+        },
+        userAgent: cleanString(req.get("user-agent"), 500),
+        occurredAt: generatedAt,
+      });
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${getDownloadFileName(document.fileName, "audit-certificate")}"`,
+      );
+      res.setHeader("X-TermCraft-Package-Hash", result.packageHash);
+      if (document.documentHash) {
+        res.setHeader("X-TermCraft-Document-Hash", document.documentHash);
+      }
+      res.send(result.buffer);
     } catch (error) {
       sendApiError(res, error);
     }

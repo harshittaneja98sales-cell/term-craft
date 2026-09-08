@@ -914,6 +914,23 @@ function isPdfFieldCompleted(
   return Boolean(value.textValue?.trim());
 }
 
+function isUploadedPdfReadyForPackage(document: UploadedPdfDocument) {
+  if (document.status === "Signed" || document.signingCompletedAt) {
+    return true;
+  }
+
+  if (document.fields.length === 0) {
+    return false;
+  }
+
+  const requiredFields = document.fields.filter((field) => field.required);
+  const fieldsToCheck = requiredFields.length > 0 ? requiredFields : document.fields;
+
+  return fieldsToCheck.every((field) =>
+    isPdfFieldCompleted(field, document.fieldValues[field.id]),
+  );
+}
+
 function createPdfTextValue(fieldId: string, textValue: string): PdfFieldValue {
   return {
     completedAt: new Date().toISOString(),
@@ -1607,6 +1624,56 @@ async function downloadUploadedPdfOriginal(
 
   downloadBlob(
     fileName || "uploaded.pdf",
+    "application/pdf",
+    await response.blob(),
+  );
+}
+
+async function downloadUploadedPdfFinalPackage(
+  session: AuthSession,
+  documentId: string,
+  fileName: string,
+) {
+  const response = await fetch(
+    `/api/pdf-documents/${encodeURIComponent(documentId)}/final-package`,
+    {
+      headers: createAuthHeaders(session),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      await readApiError(response, "Could not download signed PDF package."),
+    );
+  }
+
+  downloadBlob(
+    `${createFileSlug(fileName.replace(/\.pdf$/i, "") || "document")}-signed-package.pdf`,
+    "application/pdf",
+    await response.blob(),
+  );
+}
+
+async function downloadUploadedPdfAuditCertificate(
+  session: AuthSession,
+  documentId: string,
+  fileName: string,
+) {
+  const response = await fetch(
+    `/api/pdf-documents/${encodeURIComponent(documentId)}/audit-certificate`,
+    {
+      headers: createAuthHeaders(session),
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      await readApiError(response, "Could not download audit certificate."),
+    );
+  }
+
+  downloadBlob(
+    `${createFileSlug(fileName.replace(/\.pdf$/i, "") || "document")}-audit-certificate.pdf`,
     "application/pdf",
     await response.blob(),
   );
@@ -5008,6 +5075,9 @@ function DashboardPage() {
   const latestDocumentTimestamp =
     latestDocumentTimestamps[latestDocumentTimestamps.length - 1] ?? "";
   const hasDurableStorage = Boolean(storage?.durable || pdfStorage?.durable);
+  const selectedPdfPackageReady = selectedPdfDocument
+    ? isUploadedPdfReadyForPackage(selectedPdfDocument)
+    : false;
 
   usePageMetadata({
     canonicalPath: "/dashboard",
@@ -5148,6 +5218,42 @@ function DashboardPage() {
         requestError instanceof Error
           ? requestError.message
           : "Could not delete uploaded PDF.",
+      );
+    }
+  }
+
+  async function downloadPdfFinalPackage(document: UploadedPdfDocument) {
+    if (!session) {
+      return;
+    }
+
+    setError("");
+
+    try {
+      await downloadUploadedPdfFinalPackage(session, document.id, document.fileName);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not download signed PDF package.",
+      );
+    }
+  }
+
+  async function downloadPdfAuditCertificate(document: UploadedPdfDocument) {
+    if (!session) {
+      return;
+    }
+
+    setError("");
+
+    try {
+      await downloadUploadedPdfAuditCertificate(session, document.id, document.fileName);
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : "Could not download audit certificate.",
       );
     }
   }
@@ -5475,6 +5581,29 @@ function DashboardPage() {
                     >
                       <Download size={17} />
                       <span>Original</span>
+                    </button>
+                    <button
+                      className="button secondary"
+                      disabled={!session || !selectedPdfPackageReady}
+                      title={
+                        selectedPdfPackageReady
+                          ? "Download the flattened signed PDF with audit certificate"
+                          : "Complete all required fields before downloading the signed package"
+                      }
+                      type="button"
+                      onClick={() => void downloadPdfFinalPackage(selectedPdfDocument)}
+                    >
+                      <FileCheck2 size={17} />
+                      <span>Signed Package</span>
+                    </button>
+                    <button
+                      className="button secondary"
+                      disabled={!session}
+                      type="button"
+                      onClick={() => void downloadPdfAuditCertificate(selectedPdfDocument)}
+                    >
+                      <ShieldCheck size={17} />
+                      <span>Audit Certificate</span>
                     </button>
                     <button
                       className="icon-button danger"
