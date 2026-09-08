@@ -252,6 +252,17 @@ type PdfPlacedField = {
   y: number;
 };
 
+type PdfFieldValue = {
+  checked?: boolean;
+  completedAt: string;
+  fieldId: string;
+  signatureDataUrl?: string;
+  signatureMethod?: SignatureMethod;
+  textValue?: string;
+};
+
+type PdfEditorMode = "prepare" | "sign";
+
 type PdfFieldDragState = {
   fieldId: string;
   mode: "move" | "resize";
@@ -803,6 +814,45 @@ function PdfFieldIcon({ type }: { type: PdfFieldType }) {
   }
 
   return <FileText size={16} />;
+}
+
+function isPdfFieldCompleted(
+  field: PdfPlacedField,
+  value: PdfFieldValue | undefined,
+) {
+  if (!value) {
+    return false;
+  }
+
+  if (field.type === "checkbox") {
+    return Boolean(value.checked);
+  }
+
+  if (field.type === "signature" || field.type === "initials") {
+    return Boolean(value.signatureDataUrl);
+  }
+
+  return Boolean(value.textValue?.trim());
+}
+
+function createPdfTextValue(fieldId: string, textValue: string): PdfFieldValue {
+  return {
+    completedAt: new Date().toISOString(),
+    fieldId,
+    textValue,
+  };
+}
+
+function formatPdfFieldValue(field: PdfPlacedField, value?: PdfFieldValue) {
+  if (!value) {
+    return "";
+  }
+
+  if (field.type === "date" && value.textValue) {
+    return formatDate(value.textValue);
+  }
+
+  return value.textValue ?? "";
 }
 
 function readStoredDraft(): StoredDraft | null {
@@ -5140,20 +5190,36 @@ function PdfFieldEditorPage() {
   const [activePageNumber, setActivePageNumber] = useState(1);
   const [activeFieldType, setActiveFieldType] =
     useState<PdfFieldType>("signature");
+  const [editorMode, setEditorMode] = useState<PdfEditorMode>("prepare");
   const [fields, setFields] = useState<PdfPlacedField[]>([]);
+  const [fieldValues, setFieldValues] = useState<Record<string, PdfFieldValue>>(
+    {},
+  );
   const [isRendering, setIsRendering] = useState(false);
   const [pages, setPages] = useState<PdfPagePreview[]>([]);
   const [pdfDocument, setPdfDocument] = useState<PDFDocumentProxy | null>(null);
   const [pdfName, setPdfName] = useState("");
   const [renderError, setRenderError] = useState("");
   const [selectedFieldId, setSelectedFieldId] = useState("");
+  const [signingFieldId, setSigningFieldId] = useState("");
   const canvasRefs = useRef<Record<number, HTMLCanvasElement | null>>({});
 
   const selectedField = useMemo(
     () => fields.find((field) => field.id === selectedFieldId) ?? null,
     [fields, selectedFieldId],
   );
+  const signingField = useMemo(
+    () => fields.find((field) => field.id === signingFieldId) ?? null,
+    [fields, signingFieldId],
+  );
   const firstPageNumber = pages[0]?.pageNumber ?? 1;
+  const requiredFields = fields.filter((field) => field.required);
+  const completedFields = fields.filter((field) =>
+    isPdfFieldCompleted(field, fieldValues[field.id]),
+  );
+  const completedRequiredFields = requiredFields.filter((field) =>
+    isPdfFieldCompleted(field, fieldValues[field.id]),
+  );
 
   usePageMetadata({
     canonicalPath: "/editor",
@@ -5247,8 +5313,10 @@ function PdfFieldEditorPage() {
     setIsRendering(true);
     setRenderError("");
     setFields([]);
+    setFieldValues({});
     setActivePageNumber(1);
     setSelectedFieldId("");
+    setSigningFieldId("");
 
     try {
       const pdfjsLib = await loadPdfJsModule();
@@ -5282,6 +5350,7 @@ function PdfFieldEditorPage() {
       setPages([]);
       setPdfDocument(null);
       setPdfName("");
+      setFieldValues({});
       setActivePageNumber(1);
       setRenderError(
         error instanceof Error ? error.message : "Could not load this PDF.",
@@ -5344,13 +5413,21 @@ function PdfFieldEditorPage() {
 
   function deleteField(fieldId: string) {
     setFields((current) => current.filter((field) => field.id !== fieldId));
+    setFieldValues((current) => {
+      const nextValues = { ...current };
+      delete nextValues[fieldId];
+      return nextValues;
+    });
     setSelectedFieldId((current) => (current === fieldId ? "" : current));
+    setSigningFieldId((current) => (current === fieldId ? "" : current));
   }
 
   function clearFields() {
     if (fields.length === 0 || window.confirm("Remove all placed fields?")) {
       setFields([]);
+      setFieldValues({});
       setSelectedFieldId("");
+      setSigningFieldId("");
     }
   }
 
@@ -5438,6 +5515,7 @@ function PdfFieldEditorPage() {
     const fieldMap = {
       createdAt: new Date().toISOString(),
       fields,
+      fieldValues,
       pageCount: pages.length,
       pdfFileName: pdfName,
       version: 1,
@@ -5448,6 +5526,159 @@ function PdfFieldEditorPage() {
       "application/json;charset=utf-8",
       JSON.stringify(fieldMap, null, 2),
     );
+  }
+
+  function applyPdfFieldValue(fieldId: string, value: PdfFieldValue) {
+    setFieldValues((current) => ({ ...current, [fieldId]: value }));
+    setSigningFieldId("");
+  }
+
+  function activatePdfField(field: PdfPlacedField) {
+    setActivePageNumber(field.pageNumber);
+    setSelectedFieldId(field.id);
+
+    if (field.type === "checkbox") {
+      const currentValue = fieldValues[field.id];
+      setFieldValues((current) => ({
+        ...current,
+        [field.id]: {
+          checked: !currentValue?.checked,
+          completedAt: new Date().toISOString(),
+          fieldId: field.id,
+        },
+      }));
+      return;
+    }
+
+    setSigningFieldId(field.id);
+  }
+
+  function clearSignedValues() {
+    if (
+      Object.keys(fieldValues).length === 0 ||
+      window.confirm("Clear all filled field values?")
+    ) {
+      setFieldValues({});
+      setSigningFieldId("");
+    }
+  }
+
+  async function downloadSignedPdf() {
+    if (pages.length === 0) {
+      setRenderError("Upload a PDF before downloading a signed copy.");
+      return;
+    }
+
+    const missingRequired = requiredFields.filter(
+      (field) => !isPdfFieldCompleted(field, fieldValues[field.id]),
+    );
+
+    if (
+      missingRequired.length > 0 &&
+      !window.confirm(
+        `${missingRequired.length} required field${
+          missingRequired.length === 1 ? "" : "s"
+        } still need values. Download anyway?`,
+      )
+    ) {
+      return;
+    }
+
+    setRenderError("");
+
+    const { jsPDF } = await import("jspdf");
+    const firstPage = pages[0];
+    const firstWidth = firstPage.width / PDF_RENDER_SCALE;
+    const firstHeight = firstPage.height / PDF_RENDER_SCALE;
+    const doc = new jsPDF({
+      format: [firstWidth, firstHeight],
+      orientation: firstWidth > firstHeight ? "landscape" : "portrait",
+      unit: "pt",
+    });
+
+    pages.forEach((page, pageIndex) => {
+      const pageWidth = page.width / PDF_RENDER_SCALE;
+      const pageHeight = page.height / PDF_RENDER_SCALE;
+      const canvas = canvasRefs.current[page.pageNumber];
+
+      if (pageIndex > 0) {
+        doc.addPage(
+          [pageWidth, pageHeight],
+          pageWidth > pageHeight ? "landscape" : "portrait",
+        );
+      }
+
+      doc.setPage(pageIndex + 1);
+
+      if (canvas) {
+        doc.addImage(
+          canvas.toDataURL("image/jpeg", 0.95),
+          "JPEG",
+          0,
+          0,
+          pageWidth,
+          pageHeight,
+        );
+      }
+
+      fields
+        .filter((field) => field.pageNumber === page.pageNumber)
+        .forEach((field) => {
+          const value = fieldValues[field.id];
+          if (!isPdfFieldCompleted(field, value)) {
+            return;
+          }
+
+          const x = (field.x / 100) * pageWidth;
+          const y = (field.y / 100) * pageHeight;
+          const width = (field.width / 100) * pageWidth;
+          const height = (field.height / 100) * pageHeight;
+
+          if (
+            (field.type === "signature" || field.type === "initials") &&
+            value?.signatureDataUrl
+          ) {
+            const padding = Math.min(5, height * 0.15);
+            doc.addImage(
+              value.signatureDataUrl,
+              "PNG",
+              x + padding,
+              y + padding,
+              Math.max(1, width - padding * 2),
+              Math.max(1, height - padding * 2),
+            );
+            return;
+          }
+
+          if (field.type === "checkbox") {
+            const boxSize = Math.min(width, height, 14);
+            doc.setDrawColor(15, 118, 110);
+            doc.setLineWidth(1);
+            doc.rect(x, y, boxSize, boxSize);
+            if (value?.checked) {
+              doc.setLineWidth(1.8);
+              doc.line(x + boxSize * 0.2, y + boxSize * 0.55, x + boxSize * 0.42, y + boxSize * 0.78);
+              doc.line(x + boxSize * 0.42, y + boxSize * 0.78, x + boxSize * 0.82, y + boxSize * 0.24);
+            }
+            return;
+          }
+
+          const textValue = formatPdfFieldValue(field, value);
+          if (!textValue) {
+            return;
+          }
+
+          const fontSize = clampNumber(height * 0.44, 8, 16);
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(fontSize);
+          doc.setTextColor(15, 23, 42);
+          doc.text(textValue, x + 3, y + Math.min(height - 2, fontSize + 3), {
+            maxWidth: Math.max(1, width - 6),
+          });
+        });
+    });
+
+    doc.save(`${createFileSlug(pdfName || "signed-document")}-signed.pdf`);
   }
 
   return (
@@ -5471,6 +5702,15 @@ function PdfFieldEditorPage() {
             </label>
             <button
               className="button secondary"
+              disabled={pages.length === 0 || fields.length === 0}
+              type="button"
+              onClick={() => void downloadSignedPdf()}
+            >
+              <FileCheck2 size={17} />
+              <span>Signed PDF</span>
+            </button>
+            <button
+              className="button secondary"
               disabled={fields.length === 0}
               type="button"
               onClick={exportFieldMap}
@@ -5480,12 +5720,12 @@ function PdfFieldEditorPage() {
             </button>
             <button
               className="button ghost"
-              disabled={fields.length === 0}
+              disabled={fields.length === 0 && Object.keys(fieldValues).length === 0}
               type="button"
-              onClick={clearFields}
+              onClick={editorMode === "sign" ? clearSignedValues : clearFields}
             >
               <RotateCcw size={17} />
-              <span>Clear</span>
+              <span>{editorMode === "sign" ? "Clear Values" : "Clear"}</span>
             </button>
           </div>
         </section>
@@ -5503,6 +5743,29 @@ function PdfFieldEditorPage() {
                     ? `${pages.length} page${pages.length === 1 ? "" : "s"} loaded`
                     : "Upload a PDF to start placing fields."}
                 </span>
+                {fields.length > 0 ? (
+                  <span>
+                    {completedRequiredFields.length}/{requiredFields.length} required complete
+                  </span>
+                ) : null}
+              </div>
+              <div className="pdf-mode-switch" aria-label="PDF editor mode">
+                <button
+                  className={editorMode === "prepare" ? "active" : ""}
+                  disabled={pages.length === 0}
+                  type="button"
+                  onClick={() => setEditorMode("prepare")}
+                >
+                  Prepare
+                </button>
+                <button
+                  className={editorMode === "sign" ? "active" : ""}
+                  disabled={pages.length === 0}
+                  type="button"
+                  onClick={() => setEditorMode("sign")}
+                >
+                  Sign
+                </button>
               </div>
             </section>
 
@@ -5515,12 +5778,13 @@ function PdfFieldEditorPage() {
                     className={`pdf-tool-option ${
                       activeFieldType === type ? "active" : ""
                     }`}
-                    draggable={pages.length > 0}
+                    disabled={pages.length === 0 || editorMode === "sign"}
+                    draggable={pages.length > 0 && editorMode === "prepare"}
                     key={type}
                     type="button"
                     onClick={() => {
                       setActiveFieldType(type);
-                      if (pages.length > 0) {
+                      if (pages.length > 0 && editorMode === "prepare") {
                         addFieldToPage(type);
                       }
                     }}
@@ -5539,7 +5803,7 @@ function PdfFieldEditorPage() {
               </div>
               <button
                 className="button secondary full-width"
-                disabled={pages.length === 0}
+                disabled={pages.length === 0 || editorMode === "sign"}
                 type="button"
                 onClick={() => addFieldToPage(activeFieldType)}
               >
@@ -5607,8 +5871,16 @@ function PdfFieldEditorPage() {
                             setActivePageNumber(page.pageNumber);
                             setSelectedFieldId("");
                           }}
-                          onDragOver={(event) => event.preventDefault()}
-                          onDrop={(event) => addFieldFromDrop(event, page)}
+                          onDragOver={(event) => {
+                            if (editorMode === "prepare") {
+                              event.preventDefault();
+                            }
+                          }}
+                          onDrop={(event) => {
+                            if (editorMode === "prepare") {
+                              addFieldFromDrop(event, page);
+                            }
+                          }}
                         >
                           <canvas
                             aria-label={`PDF page ${page.pageNumber}`}
@@ -5622,6 +5894,11 @@ function PdfFieldEditorPage() {
                               <div
                                 className={`pdf-placed-field ${field.type} ${
                                   selectedFieldId === field.id ? "active" : ""
+                                } ${
+                                  isPdfFieldCompleted(field, fieldValues[field.id])
+                                    ? "filled"
+                                    : ""
+                                } ${editorMode === "sign" ? "signing-mode" : ""}
                                 }`}
                                 key={field.id}
                                 role="button"
@@ -5636,37 +5913,44 @@ function PdfFieldEditorPage() {
                                 onClick={(event) => {
                                   event.stopPropagation();
                                   setActivePageNumber(field.pageNumber);
-                                  setSelectedFieldId(field.id);
+                                  if (editorMode === "sign") {
+                                    activatePdfField(field);
+                                  } else {
+                                    setSelectedFieldId(field.id);
+                                  }
                                 }}
                                 onPointerDown={(event) =>
-                                  startFieldPointer(event, field, "move")
+                                  editorMode === "prepare"
+                                    ? startFieldPointer(event, field, "move")
+                                    : undefined
                                 }
                               >
-                                <span>
-                                  <PdfFieldIcon type={field.type} />
-                                  {field.label}
-                                </span>
-                                <small>
-                                  {field.assignee === "client" ? "Client" : "Sender"}
-                                </small>
-                                <button
-                                  className="pdf-field-remove"
-                                  type="button"
-                                  title="Remove field"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    deleteField(field.id);
-                                  }}
-                                  onPointerDown={(event) => event.stopPropagation()}
-                                >
-                                  <X size={12} />
-                                </button>
-                                <span
-                                  className="pdf-field-resize"
-                                  onPointerDown={(event) =>
-                                    startFieldPointer(event, field, "resize")
-                                  }
+                                <PdfPlacedFieldContent
+                                  field={field}
+                                  value={fieldValues[field.id]}
                                 />
+                                {editorMode === "prepare" ? (
+                                  <>
+                                    <button
+                                      className="pdf-field-remove"
+                                      type="button"
+                                      title="Remove field"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        deleteField(field.id);
+                                      }}
+                                      onPointerDown={(event) => event.stopPropagation()}
+                                    >
+                                      <X size={12} />
+                                    </button>
+                                    <span
+                                      className="pdf-field-resize"
+                                      onPointerDown={(event) =>
+                                        startFieldPointer(event, field, "resize")
+                                      }
+                                    />
+                                  </>
+                                ) : null}
                               </div>
                             ))}
                           </div>
@@ -5697,6 +5981,11 @@ function PdfFieldEditorPage() {
                       value={selectedField.type}
                       onChange={(event) => {
                         const nextType = event.target.value as PdfFieldType;
+                        setFieldValues((current) => {
+                          const nextValues = { ...current };
+                          delete nextValues[selectedField.id];
+                          return nextValues;
+                        });
                         updateField(selectedField.id, {
                           height: PDF_FIELD_DEFAULT_SIZES[nextType].height,
                           type: nextType,
@@ -5800,7 +6089,11 @@ function PdfFieldEditorPage() {
                       type="button"
                       onClick={() => {
                         setActivePageNumber(field.pageNumber);
-                        setSelectedFieldId(field.id);
+                        if (editorMode === "sign") {
+                          activatePdfField(field);
+                        } else {
+                          setSelectedFieldId(field.id);
+                        }
                       }}
                     >
                       <strong>{field.label}</strong>
@@ -5808,6 +6101,13 @@ function PdfFieldEditorPage() {
                         Page {field.pageNumber} | {PDF_FIELD_LABELS[field.type]} |{" "}
                         {field.assignee === "client" ? "Client" : "Sender"}
                       </span>
+                      <small>
+                        {isPdfFieldCompleted(field, fieldValues[field.id])
+                          ? "Complete"
+                          : field.required
+                            ? "Required"
+                            : "Optional"}
+                      </small>
                     </button>
                   ))}
                 </div>
@@ -5817,6 +6117,212 @@ function PdfFieldEditorPage() {
         </section>
       </main>
       <PublicFooter />
+      {signingField ? (
+        <PdfFieldSigningModal
+          field={signingField}
+          value={fieldValues[signingField.id]}
+          onApply={applyPdfFieldValue}
+          onClose={() => setSigningFieldId("")}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function PdfPlacedFieldContent({
+  field,
+  value,
+}: {
+  field: PdfPlacedField;
+  value?: PdfFieldValue;
+}) {
+  if (
+    (field.type === "signature" || field.type === "initials") &&
+    value?.signatureDataUrl
+  ) {
+    return (
+      <img
+        alt={`${field.label} value`}
+        className="pdf-signature-value"
+        src={value.signatureDataUrl}
+      />
+    );
+  }
+
+  if (field.type === "checkbox" && value?.checked) {
+    return (
+      <span className="pdf-checkbox-value">
+        <CheckCircle2 size={18} />
+      </span>
+    );
+  }
+
+  if ((field.type === "text" || field.type === "date") && value?.textValue) {
+    return <span className="pdf-text-value">{formatPdfFieldValue(field, value)}</span>;
+  }
+
+  return (
+    <>
+      <span>
+        <PdfFieldIcon type={field.type} />
+        {field.label}
+      </span>
+      <small>{field.assignee === "client" ? "Client" : "Sender"}</small>
+    </>
+  );
+}
+
+function PdfFieldSigningModal({
+  field,
+  onApply,
+  onClose,
+  value,
+}: {
+  field: PdfPlacedField;
+  onApply: (fieldId: string, value: PdfFieldValue) => void;
+  onClose: () => void;
+  value?: PdfFieldValue;
+}) {
+  const isSignatureField =
+    field.type === "signature" || field.type === "initials";
+  const [consentChecked, setConsentChecked] = useState(false);
+  const [pendingSignature, setPendingSignature] = useState<{
+    dataUrl: string;
+    method: SignatureMethod;
+  } | null>(
+    value?.signatureDataUrl && value.signatureMethod
+      ? {
+          dataUrl: value.signatureDataUrl,
+          method: value.signatureMethod,
+        }
+      : null,
+  );
+  const [textValue, setTextValue] = useState(
+    field.type === "date"
+      ? value?.textValue || new Date().toISOString().slice(0, 10)
+      : value?.textValue || "",
+  );
+  const canApply = isSignatureField
+    ? Boolean(pendingSignature && consentChecked)
+    : Boolean(textValue.trim());
+
+  function applyField(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (isSignatureField) {
+      if (!pendingSignature || !consentChecked) {
+        return;
+      }
+
+      onApply(field.id, {
+        completedAt: new Date().toISOString(),
+        fieldId: field.id,
+        signatureDataUrl: pendingSignature.dataUrl,
+        signatureMethod: pendingSignature.method,
+      });
+      return;
+    }
+
+    onApply(field.id, createPdfTextValue(field.id, textValue.trim()));
+  }
+
+  return (
+    <div
+      className="modal-backdrop no-print"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <section
+        className="post-download-modal pdf-sign-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pdf-sign-field-title"
+      >
+        <button
+          className="modal-close"
+          type="button"
+          title="Close"
+          onClick={onClose}
+        >
+          <X size={18} />
+        </button>
+
+        <div className="modal-icon" aria-hidden="true">
+          <PdfFieldIcon type={field.type} />
+        </div>
+
+        <div className="modal-copy">
+          <span>{field.assignee === "client" ? "Client field" : "Sender field"}</span>
+          <h2 id="pdf-sign-field-title">{field.label}</h2>
+          <p>
+            {PDF_FIELD_LABELS[field.type]} | Page {field.pageNumber} |{" "}
+            {field.required ? "Required" : "Optional"}
+          </p>
+        </div>
+
+        <form className="pdf-sign-form" onSubmit={applyField}>
+          {isSignatureField ? (
+            <>
+              <SignatureCapture
+                resetKey={field.id}
+                signerName={
+                  field.type === "initials"
+                    ? "Initials"
+                    : field.assignee === "client"
+                      ? "Client"
+                      : "Sender"
+                }
+                onSignatureChange={(dataUrl, method) => {
+                  setPendingSignature(
+                    dataUrl && method ? { dataUrl, method } : null,
+                  );
+                }}
+              />
+              <label className="pdf-required-toggle">
+                <input
+                  checked={consentChecked}
+                  type="checkbox"
+                  onChange={(event) => setConsentChecked(event.target.checked)}
+                />
+                <span>I agree to sign this field electronically.</span>
+              </label>
+            </>
+          ) : (
+            <Field label={field.type === "date" ? "Date value" : "Text value"}>
+              {field.type === "date" ? (
+                <input
+                  required
+                  type="date"
+                  value={textValue}
+                  onChange={(event) => setTextValue(event.target.value)}
+                />
+              ) : (
+                <textarea
+                  required
+                  rows={4}
+                  value={textValue}
+                  onChange={(event) => setTextValue(event.target.value)}
+                />
+              )}
+            </Field>
+          )}
+
+          <div className="create-document-actions">
+            <button className="button secondary" type="button" onClick={onClose}>
+              <X size={17} />
+              <span>Cancel</span>
+            </button>
+            <button className="button primary" disabled={!canApply} type="submit">
+              <FileCheck2 size={17} />
+              <span>Apply Field</span>
+            </button>
+          </div>
+        </form>
+      </section>
     </div>
   );
 }
